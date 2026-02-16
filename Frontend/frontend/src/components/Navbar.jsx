@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BadgePercent,
   CircleHelp,
@@ -13,9 +14,22 @@ import {
   Car,
 } from "lucide-react";
 
-const CATS = ["Berlines", "SUV & 4x4", "Citadines", "Utilitaires", "Sport", "Luxe", "Électriques", "Pièces"];
+const CATS = [
+  "Berlines",
+  "SUV & 4x4",
+  "Citadines",
+  "Utilitaires",
+  "Sport",
+  "Luxe",
+  "Électriques",
+  "Pièces",
+];
 
-export default function Navbar() {
+export default function Navbar({ onOpenLogin, user }) {
+  const navigate = useNavigate();
+
+  const firstName = user?.fullName ? user.fullName.split(" ")[0] : null;
+
   return (
     <header className="w-full">
       {/* Top dark bar */}
@@ -74,7 +88,9 @@ export default function Navbar() {
               </div>
 
               <div className="leading-tight">
-                <div className="text-2xl font-extrabold text-slate-900">AutoMarché</div>
+                <div className="text-2xl font-extrabold text-slate-900">
+                  AutoMarché
+                </div>
                 <div className="text-xs font-semibold text-slate-500 tracking-wide">
                   ACHAT &amp; VENTE AUTO
                 </div>
@@ -105,14 +121,28 @@ export default function Navbar() {
 
             {/* Actions */}
             <div className="flex items-center gap-4 min-w-65 justify-end">
-              <button className="h-12 px-7 rounded-2xl bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 flex items-center gap-2">
+              {/* ✅ Publier: si connecté -> /publier, sinon login */}
+              <button
+                onClick={() => {
+                  if (user) navigate("/publier");
+                  else onOpenLogin();
+                }}
+                className="h-12 px-7 rounded-2xl bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 flex items-center gap-2"
+              >
                 <Plus className="h-5 w-5" />
                 Publier
               </button>
 
-              <button className="h-12 px-7 rounded-2xl bg-white border border-slate-200 text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-2">
+              {/* ✅ Connexion: affiche prénom si connecté */}
+              <button
+                onClick={() => {
+                  if (!user) onOpenLogin();
+                  else navigate("/profil"); // optionnel: si tu n'as pas /profil, remplace par onOpenLogin ou remove
+                }}
+                className="h-12 px-7 rounded-2xl bg-white border border-slate-200 text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-2"
+              >
                 <User className="h-5 w-5" />
-                Connexion
+                {firstName || "Connexion"}
               </button>
             </div>
           </div>
