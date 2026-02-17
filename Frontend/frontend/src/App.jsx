@@ -7,6 +7,8 @@ import AuthModal from "./components/AuthModal";
 import HomePage from "./pages/HomePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ListingPage from "./pages/ListingPage";
+import DashboardPage from "./pages/DashboardPage.jsx";
+import AnnonceDetail from "./pages/AnnonceDetail";
 
 export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
@@ -56,6 +58,8 @@ export default function App() {
 
         {/* ✅ on passe user à ListingPage si tu veux auto-fill */}
         <Route path="/publier" element={<ListingPage user={user} />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/annonce/:id" element={<AnnonceDetail />} />
 
         <Route path="*" element={<div className="p-6">Page introuvable</div>} />
       </Routes>

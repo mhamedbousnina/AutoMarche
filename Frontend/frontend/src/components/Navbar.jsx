@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BadgePercent,
   CircleHelp,
   Globe,
   Mail,
@@ -12,6 +11,8 @@ import {
   Search,
   ChevronDown,
   Car,
+  LogOut,
+  LayoutDashboard,
 } from "lucide-react";
 
 const CATS = [
@@ -25,10 +26,43 @@ const CATS = [
   "Pièces",
 ];
 
+// ✅ Initiales depuis user.fullName
+function getInitials(fullName = "") {
+  return fullName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+}
+
 export default function Navbar({ onOpenLogin, user }) {
   const navigate = useNavigate();
-
   const firstName = user?.fullName ? user.fullName.split(" ")[0] : null;
+
+  const [openMenu, setOpenMenu] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(e.target)) setOpenMenu(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const goDashboard = () => {
+    setOpenMenu(false);
+    navigate("/dashboard"); // ✅ dashboard normal
+  };
+
+  const logout = () => {
+    setOpenMenu(false);
+    localStorage.removeItem("token");
+    navigate("/");
+    window.location.reload();
+  };
 
   return (
     <header className="w-full">
@@ -36,7 +70,6 @@ export default function Navbar({ onOpenLogin, user }) {
       <div className="bg-slate-900 text-slate-200">
         <div className="w-full px-8">
           <div className="h-10 flex items-center justify-between text-sm">
-            {/* Left */}
             <div className="flex items-center gap-5">
               <a href="#" className="flex items-center gap-2 hover:text-white">
                 <CircleHelp className="h-4 w-4 opacity-90" />
@@ -54,7 +87,6 @@ export default function Navbar({ onOpenLogin, user }) {
               </div>
             </div>
 
-            {/* Right */}
             <div className="flex items-center gap-6">
               <a href="#" className="flex items-center gap-2 hover:text-white">
                 <Sparkles className="h-4 w-4" />
@@ -88,7 +120,10 @@ export default function Navbar({ onOpenLogin, user }) {
               </div>
 
               <div className="leading-tight">
-                <div className="text-2xl font-extrabold text-slate-900">
+                <div
+                  onClick={() => navigate("/")}
+                  className="text-2xl font-extrabold text-slate-900 cursor-pointer hover:text-blue-600 transition"
+                >
                   AutoMarché
                 </div>
                 <div className="text-xs font-semibold text-slate-500 tracking-wide">
@@ -121,7 +156,7 @@ export default function Navbar({ onOpenLogin, user }) {
 
             {/* Actions */}
             <div className="flex items-center gap-4 min-w-65 justify-end">
-              {/* ✅ Publier: si connecté -> /publier, sinon login */}
+              {/* Publier */}
               <button
                 onClick={() => {
                   if (user) navigate("/publier");
@@ -133,17 +168,64 @@ export default function Navbar({ onOpenLogin, user }) {
                 Publier
               </button>
 
-              {/* ✅ Connexion: affiche prénom si connecté */}
-              <button
-                onClick={() => {
-                  if (!user) onOpenLogin();
-                  else navigate("/profil"); // optionnel: si tu n'as pas /profil, remplace par onOpenLogin ou remove
-                }}
-                className="h-12 px-7 rounded-2xl bg-white border border-slate-200 text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-2"
-              >
-                <User className="h-5 w-5" />
-                {firstName || "Connexion"}
-              </button>
+              {/* User dropdown */}
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => {
+                    if (!user) onOpenLogin();
+                    else setOpenMenu((v) => !v);
+                  }}
+                  className="h-12 px-4 pr-6 rounded-2xl bg-white border border-slate-200 text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-3"
+                >
+                  {/* ✅ Avatar avec initiales */}
+                  {user ? (
+                    <div className="h-9 w-9 rounded-full bg-blue-600 text-white text-sm font-bold grid place-items-center">
+                      {getInitials(user.fullName)}
+                    </div>
+                  ) : (
+                    <User className="h-5 w-5" />
+                  )}
+
+                  <span>{firstName || "Connexion"}</span>
+
+                  {user ? (
+                    <ChevronDown className="h-4 w-4 text-slate-500" />
+                  ) : null}
+                </button>
+
+                {user && openMenu && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-lg overflow-hidden z-50">
+                    {/* user info */}
+                    <div className="px-4 py-3">
+                      <div className="text-sm font-semibold text-slate-900 truncate">
+                        {user.fullName || "Utilisateur"}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {user.email || ""}
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-slate-200" />
+
+                    {/* ✅ فقط Tableau de bord */}
+                    <MenuItem
+                      icon={LayoutDashboard}
+                      label="Tableau de bord"
+                      onClick={goDashboard}
+                    />
+
+                    <div className="h-px bg-slate-200" />
+
+                    <button
+                      onClick={logout}
+                      className="w-full px-4 py-3 flex items-center gap-3 text-red-600 hover:bg-red-50 transition text-sm"
+                    >
+                      <LogOut className="h-5 w-5" />
+                      <span className="font-semibold">Déconnexion</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -162,5 +244,17 @@ export default function Navbar({ onOpenLogin, user }) {
         </div>
       </div>
     </header>
+  );
+}
+
+function MenuItem({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full px-4 py-3 flex items-center gap-3 text-slate-700 hover:bg-slate-50 transition text-sm"
+    >
+      <Icon className="h-5 w-5 text-slate-500" />
+      <span className="font-semibold">{label}</span>
+    </button>
   );
 }
