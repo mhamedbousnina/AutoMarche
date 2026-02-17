@@ -20,3 +20,26 @@ export async function apiRequest(path, options = {}) {
 
   return data;
 }
+
+export const listingsApi = {
+  create: ({ token, form, photos }) => {
+    const fd = new FormData();
+
+    Object.entries(form).forEach(([k, v]) => {
+      if (typeof v === "boolean") fd.append(k, v ? "true" : "false");
+      else fd.append(k, v ?? "");
+    });
+
+    (photos || []).forEach((p) => {
+      const file = p?.file || p;
+      if (file) fd.append("photos", file);
+    });
+
+    return request("/listings", {
+      method: "POST",
+      body: fd,
+      token,
+      isFormData: true,
+    });
+  },
+};
