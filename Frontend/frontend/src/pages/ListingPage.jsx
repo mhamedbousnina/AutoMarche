@@ -8,6 +8,7 @@ import {
     PhoneCall,
     Camera,
 } from "lucide-react";
+import { createListing } from "../apis/listings";
 
 const TUNISIA_GOVS = [
     "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul", "Zaghouan", "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana",
@@ -153,65 +154,26 @@ export default function ListingPage() {
   e.preventDefault();
 
   const isValid = validateForm();
-
   if (!isValid) {
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
-  const token = localStorage.getItem("token");
 
+  const token = localStorage.getItem("token");
   if (!token) {
     alert("Vous devez être connecté");
     return;
   }
 
-        const fd = new FormData();
-
-        fd.append("title", form.title);
-        fd.append("state", form.state);
-        fd.append("brand", form.brand);
-        fd.append("model", form.model);
-        fd.append("year", form.year);
-        fd.append("mileage", form.mileage);
-        fd.append("fuel", form.fuel);
-        fd.append("gearbox", form.gearbox);
-        fd.append("color", form.color);
-        fd.append("body", form.body);
-        fd.append("power", form.power);
-        fd.append("doors", form.doors);
-        fd.append("description", form.description);
-        fd.append("price", form.price);
-        fd.append("negotiable", String(form.negotiable));
-
-        // ✅ IMPORTANT : mêmes noms que backend
-        fd.append("contactFullName", form.fullName);
-        fd.append("contactPhone", form.phone);
-        fd.append("gov", form.gov);
-        fd.append("city", form.city);
-
-        photos.forEach((p) => fd.append("photos", p.file));
-
-        const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-        const res = await fetch(`${API_URL}/listings`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-            body: fd,
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-            alert(data?.message || "Erreur lors de la publication");
-            return;
-        }
-
-        setShowSuccess(true);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        setTimeout(() => setShowSuccess(false), 4000);
-    }
+  try {
+    const data = await createListing({ form, photos });
+    setShowSuccess(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => setShowSuccess(false), 4000);
+  } catch (err) {
+    alert(err.message || "Erreur lors de la publication");
+  }
+}
 
     return (
 

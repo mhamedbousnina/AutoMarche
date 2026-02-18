@@ -1,13 +1,15 @@
-import { Router } from "express";
-import * as ctrl from "../controllers/auth.controller.js";
+import express from "express";
 import { requireAuth } from "../middlewares/auth.middleware.js";
+import * as authController from "../controllers/auth.controller.js";
 
-const router = Router();
+const router = express.Router();
 
-router.post("/register", ctrl.register);
-router.post("/login", ctrl.login);
-router.post("/forgot-password", ctrl.forgotPassword);
-router.post("/reset-password", ctrl.resetPassword);
-router.get("/me", requireAuth, ctrl.me);
+router.post("/register", authController.register);
+router.post("/login", authController.login);
+router.post("/forgot-password", authController.forgotPassword);
+router.post("/reset-password", authController.resetPassword);
+
+// ✅ IMPORTANT
+router.get("/me", requireAuth, authController.me);
 
 export default router;

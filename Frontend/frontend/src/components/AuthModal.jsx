@@ -26,11 +26,11 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
-    
+
     // ✅ animation success
     const [showSuccessAnim, setShowSuccessAnim] = useState(false);
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
     useEffect(() => {
         if (!open) return;
@@ -79,7 +79,12 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.message || "Erreur serveur");
+
+        if (!res.ok) {
+            console.error("AUTH API ERROR:", res.status, path, data);
+            throw new Error(data?.message || "Erreur serveur");
+        }
+
         return data;
     }
 
@@ -90,7 +95,7 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
 
         try {
             if (isRegister) {
-                await callApi("/auth/register", {
+                await callApi("/api/auth/register", {
                     fullName,
                     phone,
                     email,
@@ -118,19 +123,15 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
 
 
             } else if (isLogin) {
-  const data = await callApi("/auth/login", { email, password });
+                const data = await callApi("/api/auth/login", { email, password });
 
-  if (data?.token) localStorage.setItem("token", data.token);
+                if (data?.token) localStorage.setItem("token", data.token);
+                onAuthSuccess?.(data.user);
 
-  // ✅ envoyer l'utilisateur au parent (App)
-  onAuthSuccess?.(data.user);
-
- 
-
-  setTimeout(() => handleClose(), 300);
+                setTimeout(() => handleClose(), 300);
 
             } else if (isReset) {
-                const data = await callApi("/auth/forgot-password", { email });
+                const data = await callApi("/api/auth/forgot-password", { email });
                 setSuccess(data?.message || "Lien envoyé ✅");
             }
         } catch (e) {

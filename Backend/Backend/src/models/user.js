@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema(
 
     resetPasswordTokenHash: { type: String, default: null },
     resetPasswordExpiresAt: { type: Date, default: null },
+    avatarUrl: { type: String, default: "" },
   },
   { timestamps: true }
 );

@@ -1,5 +1,6 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/AppError.js";
+import User from "../models/user.js";
 import {
   registerSchema,
   loginSchema,

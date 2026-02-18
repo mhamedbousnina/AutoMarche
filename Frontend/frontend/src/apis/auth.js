@@ -1,33 +1,34 @@
+// src/apis/auth.js
 import { apiRequest } from "./api";
 
 export function register(payload) {
-  return apiRequest("/auth/register", {
+  return apiRequest("/api/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export function login(payload) {
-  return apiRequest("/auth/login", {
+  return apiRequest("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export function forgotPassword(email) {
-  return apiRequest("/auth/forgot-password", {
+  return apiRequest("/api/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email }),
   });
 }
 
 export function resetPassword(token, newPassword) {
-  return apiRequest("/auth/reset-password", {
+  return apiRequest("/api/auth/reset-password", {
     method: "POST",
     body: JSON.stringify({ token, newPassword }),
   });
 }
 
-export function me() {
-  return apiRequest("/auth/me", { method: "GET" });
+export function meAuth() {
+  return apiRequest("/api/auth/me", { method: "GET" });
 }

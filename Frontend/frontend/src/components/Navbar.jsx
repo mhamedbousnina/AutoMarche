@@ -28,17 +28,52 @@ const CATS = [
 
 // ✅ Initiales depuis user.fullName
 function getInitials(fullName = "") {
-  return fullName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
+  return (
+    fullName
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join("") || "U"
+  );
+}
+
+function readUserLS() {
+  try {
+    const s = localStorage.getItem("user");
+    return s ? JSON.parse(s) : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function Navbar({ onOpenLogin, user }) {
   const navigate = useNavigate();
-  const firstName = user?.fullName ? user.fullName.split(" ")[0] : null;
+
+  // ✅ IMPORTANT: navUser prend localStorage en priorité (pour survivre au refresh)
+  const [navUser, setNavUser] = useState(() => readUserLS() || user || null);
+
+  // ✅ si parent change user, on sync (sans écraser avatarUrl si absent)
+  useEffect(() => {
+    if (!user) return;
+
+    const stored = readUserLS() || {};
+    const merged = { ...stored, ...user };
+
+    // si le parent ne fournit pas avatarUrl, garder celui du storage
+    if (user.avatarUrl === undefined) merged.avatarUrl = stored.avatarUrl;
+
+    setNavUser(merged);
+  }, [user]);
+
+  // ✅ écoute l'event quand MyProfileContent met à jour l'avatar
+  useEffect(() => {
+    const sync = () => setNavUser(readUserLS());
+    window.addEventListener("userUpdated", sync);
+    return () => window.removeEventListener("userUpdated", sync);
+  }, []);
+
+  const firstName = navUser?.fullName ? navUser.fullName.split(" ")[0] : null;
 
   const [openMenu, setOpenMenu] = useState(false);
   const menuRef = useRef(null);
@@ -54,12 +89,14 @@ export default function Navbar({ onOpenLogin, user }) {
 
   const goDashboard = () => {
     setOpenMenu(false);
-    navigate("/dashboard"); // ✅ dashboard normal
+    navigate("/dashboard");
   };
 
   const logout = () => {
     setOpenMenu(false);
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.dispatchEvent(new Event("userUpdated"));
     navigate("/");
     window.location.reload();
   };
@@ -159,7 +196,7 @@ export default function Navbar({ onOpenLogin, user }) {
               {/* Publier */}
               <button
                 onClick={() => {
-                  if (user) navigate("/publier");
+                  if (navUser) navigate("/publier");
                   else onOpenLogin();
                 }}
                 className="h-12 px-7 rounded-2xl bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 flex items-center gap-2"
@@ -172,15 +209,23 @@ export default function Navbar({ onOpenLogin, user }) {
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => {
-                    if (!user) onOpenLogin();
+                    if (!navUser) onOpenLogin();
                     else setOpenMenu((v) => !v);
                   }}
                   className="h-12 px-4 pr-6 rounded-2xl bg-white border border-slate-200 text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-3"
                 >
-                  {/* ✅ Avatar avec initiales */}
-                  {user ? (
-                    <div className="h-9 w-9 rounded-full bg-blue-600 text-white text-sm font-bold grid place-items-center">
-                      {getInitials(user.fullName)}
+                  {/* ✅ Avatar : photo si existe sinon initiales */}
+                  {navUser ? (
+                    <div className="h-9 w-9 rounded-full overflow-hidden bg-blue-600 text-white text-sm font-bold grid place-items-center">
+                      {navUser.avatarUrl ? (
+                        <img
+                          src={navUser.avatarUrl}
+                          alt="avatar"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        getInitials(navUser.fullName)
+                      )}
                     </div>
                   ) : (
                     <User className="h-5 w-5" />
@@ -188,26 +233,22 @@ export default function Navbar({ onOpenLogin, user }) {
 
                   <span>{firstName || "Connexion"}</span>
 
-                  {user ? (
-                    <ChevronDown className="h-4 w-4 text-slate-500" />
-                  ) : null}
+                  {navUser ? <ChevronDown className="h-4 w-4 text-slate-500" /> : null}
                 </button>
 
-                {user && openMenu && (
+                {navUser && openMenu && (
                   <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-lg overflow-hidden z-50">
-                    {/* user info */}
                     <div className="px-4 py-3">
                       <div className="text-sm font-semibold text-slate-900 truncate">
-                        {user.fullName || "Utilisateur"}
+                        {navUser.fullName || "Utilisateur"}
                       </div>
                       <div className="text-xs text-slate-500 truncate">
-                        {user.email || ""}
+                        {navUser.email || ""}
                       </div>
                     </div>
 
                     <div className="h-px bg-slate-200" />
 
-                    {/* ✅ فقط Tableau de bord */}
                     <MenuItem
                       icon={LayoutDashboard}
                       label="Tableau de bord"

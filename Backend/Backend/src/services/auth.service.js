@@ -17,7 +17,7 @@ function sanitize(user) {
     fullName: user.fullName,
     phone: user.phone,
     email: user.email,
-    createdAt: user.createdAt,
+    
   };
 }
 
@@ -34,17 +34,20 @@ export async function register(payload) {
   return { user: sanitize(user), token };
 }
 
-export async function login(payload) {
-  const { email, password } = payload;
-
+export async function login({ email, password }) {
   const user = await User.findOne({ email });
   if (!user) throw new AppError("Email ou mot de passe incorrect", 401);
 
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) throw new AppError("Email ou mot de passe incorrect", 401);
 
-  const token = signToken(user._id);
-  return { user: sanitize(user), token };
+  const token = jwt.sign(
+    { userId: user._id.toString() }, // ✅ IMPORTANT
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  return { token, user: sanitize(user) };
 }
 
 export async function forgotPassword(payload) {
