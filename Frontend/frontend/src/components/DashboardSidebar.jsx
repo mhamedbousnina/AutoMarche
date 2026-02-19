@@ -1,26 +1,60 @@
 import React from "react";
-import { LayoutDashboard, Megaphone, MessageSquare, Heart, User, HelpCircle, Settings, LogOut, Plus,} from "lucide-react";
+import {
+  LayoutDashboard,
+  Megaphone,
+  MessageSquare,
+  Heart,
+  User,
+  HelpCircle,
+  Settings,
+  LogOut,
+  Plus,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function DashboardSidebar({
+  user, // ✅ AJOUT: infos depuis DB
   active = "dashboard",
   counts = { ads: 3, messages: 5 },
   onLogout,
-  onPublish,
-  onSelect, // ✅ AJOUT
+  onSelect,
 }) {
   const navigate = useNavigate();
+
+  // ✅ Initiales si pas d'avatar ou pas de nom
+  const initials = user?.fullName
+    ? user.fullName
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase())
+        .join("")
+    : "U";
+
   return (
     <aside className="w-72 bg-white border-r border-slate-200 h-[calc(100vh-0px)] flex flex-col">
       {/* Header user */}
       <div className="p-5">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-blue-600 text-white grid place-items-center font-bold">
-            AM
-          </div>
-          <div className="leading-tight">
-            <div className="font-semibold text-slate-900">Ahmed M.</div>
-            <div className="text-xs text-slate-500">ahmed@email.com</div>
+          {user?.avatar ? (
+            <img
+              src={user.avatar}
+              alt="avatar"
+              className="h-10 w-10 rounded-full object-cover border border-slate-200"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-blue-600 text-white grid place-items-center font-bold">
+              {initials}
+            </div>
+          )}
+
+          <div className="leading-tight min-w-0">
+            <div className="font-semibold text-slate-900 truncate">
+              {user?.fullName || "Utilisateur"}
+            </div>
+            <div className="text-xs text-slate-500 truncate">
+              {user?.email || "email@example.com"}
+            </div>
           </div>
         </div>
       </div>

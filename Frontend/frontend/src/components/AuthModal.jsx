@@ -11,6 +11,7 @@ import {
     Phone,
     CheckCircle2,
 } from "lucide-react";
+import { getMe } from "../apis/user";
 
 export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess }) {
     const [showPwd, setShowPwd] = useState(false);
@@ -122,14 +123,24 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
                 }, 3000);
 
 
-            } else if (isLogin) {
-                const data = await callApi("/api/auth/login", { email, password });
+           } else if (isLogin) {
+            const data = await callApi("/api/auth/login", { email, password });
 
-                if (data?.token) localStorage.setItem("token", data.token);
-                onAuthSuccess?.(data.user);
+            // 1) save token
+            if (data?.token) localStorage.setItem("token", data.token);
 
-                setTimeout(() => handleClose(), 300);
+            // 2) récupérer user complet (avec avatarUrl)
+            const meRes = await getMe();
+            const meUser = meRes?.user ?? meRes;
 
+            // 3) sauver user + notifier navbar (sans refresh)
+            localStorage.setItem("user", JSON.stringify(meUser));
+            window.dispatchEvent(new Event("userUpdated"));
+
+            // 4) notifier ton parent
+            onAuthSuccess?.(meUser);
+
+            setTimeout(() => handleClose(), 300);
             } else if (isReset) {
                 const data = await callApi("/api/auth/forgot-password", { email });
                 setSuccess(data?.message || "Lien envoyé ✅");

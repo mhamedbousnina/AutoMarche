@@ -14,6 +14,7 @@ import {
   LogOut,
   LayoutDashboard,
 } from "lucide-react";
+import { getMe } from "../apis/user"; // ✅
 
 const CATS = [
   "Berlines",
@@ -26,7 +27,6 @@ const CATS = [
   "Pièces",
 ];
 
-// ✅ Initiales depuis user.fullName
 function getInitials(fullName = "") {
   return (
     fullName
@@ -50,34 +50,12 @@ function readUserLS() {
 export default function Navbar({ onOpenLogin, user }) {
   const navigate = useNavigate();
 
-  // ✅ IMPORTANT: navUser prend localStorage en priorité (pour survivre au refresh)
   const [navUser, setNavUser] = useState(() => readUserLS() || user || null);
-
-  // ✅ si parent change user, on sync (sans écraser avatarUrl si absent)
-  useEffect(() => {
-    if (!user) return;
-
-    const stored = readUserLS() || {};
-    const merged = { ...stored, ...user };
-
-    // si le parent ne fournit pas avatarUrl, garder celui du storage
-    if (user.avatarUrl === undefined) merged.avatarUrl = stored.avatarUrl;
-
-    setNavUser(merged);
-  }, [user]);
-
-  // ✅ écoute l'event quand MyProfileContent met à jour l'avatar
-  useEffect(() => {
-    const sync = () => setNavUser(readUserLS());
-    window.addEventListener("userUpdated", sync);
-    return () => window.removeEventListener("userUpdated", sync);
-  }, []);
-
-  const firstName = navUser?.fullName ? navUser.fullName.split(" ")[0] : null;
 
   const [openMenu, setOpenMenu] = useState(false);
   const menuRef = useRef(null);
 
+  // ✅ ferme menu quand click dehors
   useEffect(() => {
     function onDocClick(e) {
       if (!menuRef.current) return;
@@ -86,6 +64,45 @@ export default function Navbar({ onOpenLogin, user }) {
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
+
+  // ✅ sync si parent change user (ne pas perdre avatarUrl)
+  useEffect(() => {
+    if (!user) return;
+    const stored = readUserLS() || {};
+    const merged = { ...stored, ...user };
+    if (user.avatarUrl === undefined) merged.avatarUrl = stored.avatarUrl;
+    setNavUser(merged);
+  }, [user]);
+
+  // ✅ écoute event userUpdated
+  useEffect(() => {
+    const sync = () => setNavUser(readUserLS());
+    window.addEventListener("userUpdated", sync);
+    return () => window.removeEventListener("userUpdated", sync);
+  }, []);
+
+  // ✅ AU RECONNECT: si token موجود و user LS فارغ -> getMe()
+  useEffect(() => {
+    (async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const lsUser = readUserLS();
+      if (lsUser && (lsUser.avatarUrl || lsUser.fullName || lsUser.email)) return;
+
+      try {
+        const res = await getMe();
+        const freshUser = res?.user ?? res;
+        if (freshUser) {
+          localStorage.setItem("user", JSON.stringify(freshUser));
+          setNavUser(freshUser);
+          window.dispatchEvent(new Event("userUpdated"));
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const firstName = navUser?.fullName ? navUser.fullName.split(" ")[0] : null;
 
   const goDashboard = () => {
     setOpenMenu(false);
@@ -197,7 +214,7 @@ export default function Navbar({ onOpenLogin, user }) {
               <button
                 onClick={() => {
                   if (navUser) navigate("/publier");
-                  else onOpenLogin();
+                  else onOpenLogin?.();
                 }}
                 className="h-12 px-7 rounded-2xl bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 flex items-center gap-2"
               >
@@ -209,12 +226,11 @@ export default function Navbar({ onOpenLogin, user }) {
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => {
-                    if (!navUser) onOpenLogin();
+                    if (!navUser) onOpenLogin?.();
                     else setOpenMenu((v) => !v);
                   }}
                   className="h-12 px-4 pr-6 rounded-2xl bg-white border border-slate-200 text-slate-900 font-semibold hover:bg-slate-50 flex items-center gap-3"
                 >
-                  {/* ✅ Avatar : photo si existe sinon initiales */}
                   {navUser ? (
                     <div className="h-9 w-9 rounded-full overflow-hidden bg-blue-600 text-white text-sm font-bold grid place-items-center">
                       {navUser.avatarUrl ? (
@@ -270,7 +286,6 @@ export default function Navbar({ onOpenLogin, user }) {
             </div>
           </div>
 
-          {/* Categories row */}
           <nav className="h-12 flex items-center gap-7 text-sm font-semibold text-slate-700">
             <a href="#" className="flex items-center gap-1 hover:text-blue-600">
               Toutes <ChevronDown className="h-4 w-4 text-slate-500" />

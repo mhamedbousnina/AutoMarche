@@ -29,3 +29,6 @@ export function uploadAvatar(file) {
     body: fd,
   });
 }
+export function deleteAvatar() {
+  return apiRequest("/api/users/me/avatar", { method: "DELETE" });
+}

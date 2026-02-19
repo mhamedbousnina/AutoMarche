@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { User,ImagePlus,Trash2} from "lucide-react";
-import { getMe, updateMe, changePassword, uploadAvatar } from "../apis/user";
+import { getMe, updateMe, changePassword, uploadAvatar, deleteAvatar } from "../apis/user";
 
 export default function MyProfileContent() {
   const [form, setForm] = useState({
@@ -111,6 +111,7 @@ export default function MyProfileContent() {
   try {
     const res = await uploadAvatar(file);
     const updatedUser = res?.user;
+    
 
     if (updatedUser?.avatarUrl) {
       // ✅ mettre à jour form + preview avec URL serveur
@@ -132,21 +133,21 @@ export default function MyProfileContent() {
   }
 }
 
-function removeAvatar() {
-  if (avatarPreview?.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
+async function removeAvatar() {
+  try {
+    const res = await deleteAvatar();
+    const updatedUser = res?.user ?? res;
 
-  setAvatarPreview("");
-  setForm((prev) => ({ ...prev, avatarUrl: "" }));
+    setAvatarPreview("");
+    setForm((prev) => ({ ...prev, avatarUrl: "" }));
 
-  // ✅ sync navbar
-  const stored = JSON.parse(localStorage.getItem("user") || "null");
-  if (stored) {
-    stored.avatarUrl = "";
-    localStorage.setItem("user", JSON.stringify(stored));
+    localStorage.setItem("user", JSON.stringify(updatedUser));
     window.dispatchEvent(new Event("userUpdated"));
-  }
 
-  showToast("success", "Photo supprimée ");
+    showToast("success", "Photo supprimée");
+  } catch (err) {
+    showToast("error", err.message || "Suppression échouée");
+  }
 }
 
   async function handleSubmit(e) {

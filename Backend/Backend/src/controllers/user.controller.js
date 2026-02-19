@@ -118,3 +118,29 @@ export const updateMyAvatar = asyncHandler(async (req, res) => {
     },
   });
 });
+export const deleteMyAvatar = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select("avatarUrl fullName email phone");
+  if (!user) throw new AppError("Utilisateur introuvable", 404);
+
+  // ✅ supprimer fichier local si existe
+  if (user.avatarUrl && user.avatarUrl.includes("/uploads/")) {
+    const oldFile = user.avatarUrl.split("/uploads/")[1];
+    const oldPath = path.join(process.cwd(), "uploads", oldFile);
+    if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {});
+  }
+
+  // ✅ supprimer dans DB
+  user.avatarUrl = "";
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Avatar supprimé",
+    user: {
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone,
+      avatarUrl: user.avatarUrl,
+    },
+  });
+});
