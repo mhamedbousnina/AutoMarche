@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getListingById, toBackendImage } from "../apis/listings";
+import { getListingById, toBackendImage,addView } from "../apis/listings";
+import { addFavorite, removeFavorite, isFavorite } from "../apis/favorites";
 
 import {
   MapPin,
@@ -48,6 +49,74 @@ export default function AnnonceDetail() {
   const [fullscreen, setFullscreen] = useState(false);
   const [liked, setLiked] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
+
+useEffect(() => {
+  let mounted = true;
+
+  (async () => {
+    try {
+      setLoading(true);
+
+      // 1) charger annonce
+      const data = await getListingById(id);
+      if (!mounted) return;
+      setListing(data);
+
+      // 2) ✅ ajouter vue (anti-double)
+      const key = `viewed_${id}`;
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        await addView(id);
+      }
+
+      setCurrentImage(0);
+      setFullscreen(false);
+      setShowPhone(false);
+    } catch {
+      if (mounted) setListing(null);
+    } finally {
+      if (mounted) setLoading(false);
+    }
+  })();
+
+  return () => {
+    mounted = false;
+  };
+}, [id]);
+
+  useEffect(() => {
+  let mounted = true;
+
+  (async () => {
+    try {
+      setLoading(true);
+      const data = await getListingById(id);
+      if (!mounted) return;
+
+      setListing(data);
+      setCurrentImage(0);
+      setFullscreen(false);
+      setShowPhone(false);
+
+      // ✅ حالة favoris للمشتري
+      try {
+        const likedNow = await isFavorite(id);
+        if (mounted) setLiked(likedNow);
+      } catch {
+        // اذا مش ملوّقين، خليها false
+        if (mounted) setLiked(false);
+      }
+    } catch {
+      if (mounted) setListing(null);
+    } finally {
+      if (mounted) setLoading(false);
+    }
+  })();
+
+  return () => {
+    mounted = false;
+  };
+}, [id]);
 
   // ✅ Fetch listing depuis backend
   useEffect(() => {
@@ -334,7 +403,19 @@ export default function AnnonceDetail() {
                 <div className="flex gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setLiked(!liked)}
+                    onClick={async () => {
+  try {
+    if (liked) {
+      await removeFavorite(id);
+      setLiked(false);
+    } else {
+      await addFavorite(id);
+      setLiked(true);
+    }
+  } catch (e) {
+    alert(e.message || "Erreur favoris");
+  }
+}}
                     className={[
                       "w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center transition-colors",
                       liked ? "bg-red-50 border-red-200" : "hover:bg-slate-50",

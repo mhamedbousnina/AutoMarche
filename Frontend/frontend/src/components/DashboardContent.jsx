@@ -23,6 +23,8 @@ export default function DashboardContent() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  
+
   // ✅ charge les annonces du user
   useEffect(() => {
     let mounted = true;
@@ -47,20 +49,23 @@ export default function DashboardContent() {
   }, [refreshKey]);
 
   // ✅ calcule les stats
-  const stats = useMemo(() => {
-    // Si tu n’as pas status, prends juste total
-    const activeAds = listings.length;
+ const stats = useMemo(() => {
+  const activeAds = listings.length;
 
-    // Si tu as un champ status: "active"
-    // const activeAds = listings.filter(l => (l.status || "").toLowerCase() === "active").length;
+  const totalViews = listings.reduce((sum, l) => sum + Number(l.views || 0), 0);
 
-    return {
-      activeAds,
-      totalViews: 0,
-      messages: 0,
-      favorites: 0,
-    };
-  }, [listings]);
+  const totalFavorites = listings.reduce(
+    (sum, l) => sum + Number(l.favoritesCount || 0),
+    0
+  );
+
+  return {
+    activeAds,
+    totalViews,
+    messages: 0,
+    favorites: totalFavorites, // ✅
+  };
+}, [listings]);
 
   return (
     <div className="flex-1 p-10">

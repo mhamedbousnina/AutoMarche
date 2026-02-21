@@ -6,7 +6,9 @@ import {
   getMyListings,
   getListingById,
   updateListing,
-   deleteListing
+   deleteListing,
+   getPublicListings,
+   addView,
 } from "../controllers/listing.controller.js";
 
 const router = Router();
@@ -16,6 +18,8 @@ router.get("/me", requireAuth, getMyListings);
 router.get("/:id", getListingById);
 router.patch("/:id", requireAuth, upload.array("photos", 10), updateListing);
 router.delete("/:id", requireAuth, deleteListing);
+router.get("/", getPublicListings);
+router.post("/:id/view", addView);
  
 
 export default router;

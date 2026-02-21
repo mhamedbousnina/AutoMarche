@@ -33,6 +33,7 @@ const listingSchema = new mongoose.Schema(
 
     status: { type: String, default: "Pending" }, // optionnel
     views: { type: Number, default: 0 },          // optionnel
+    favoritesCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

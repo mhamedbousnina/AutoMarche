@@ -203,3 +203,29 @@ export const deleteListing = asyncHandler(async (req, res) => {
 
   res.json({ success: true, message: "Annonce supprimée" });
 });
+
+export const getPublicListings = asyncHandler(async (req, res) => {
+  const limit = Number(req.query.limit || 9);
+
+  const listings = await Listing.find()
+    .sort({ createdAt: -1 })
+    .limit(limit);
+
+  res.json({ success: true, listings });
+});
+
+export const addView = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // ✅ increment atomic
+  const updated = await Listing.findByIdAndUpdate(
+    id,
+    { $inc: { views: 1 } },
+    { new: true }
+  );
+
+  if (!updated) throw new AppError("Annonce introuvable", 404);
+
+  res.json({ success: true, views: updated.views });
+});
+

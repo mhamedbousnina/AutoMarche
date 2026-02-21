@@ -91,3 +91,20 @@ export async function deleteListing(id) {
 
   return data;
 }
+
+export async function getPublicListings() {
+  const res = await fetch(`${API_URL}/listings`);
+  const data = await res.json();
+
+  if (!res.ok) throw new Error(data?.message || "Erreur");
+  return data.listings; // array
+}
+
+export async function addView(listingId) {
+  const res = await fetch(`${API_URL}/listings/${listingId}/view`, {
+    method: "POST",
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.message || "Erreur add view");
+  return data;
+}
