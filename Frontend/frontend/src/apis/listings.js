@@ -1,62 +1,93 @@
 // src/apis/listings.js
-// Compatible avec ton ListingPage.jsx (FormData + token + VITE_API_URL=http://localhost:5000)
-// ✅ Backend: app.use("/api/listings", listingRoutes)
-// ✅ Donc endpoint: POST /api/listings
 
-import { apiRequest } from "./api";
+const API_URL = "http://localhost:5000/api";
+const BACKEND_URL = "http://localhost:5000";
 
-/**
- * Construit un FormData compatible backend
- * - photos: array de {file,url} ou File
- * - form: objet du formulaire (comme dans ton state)
- */
-export function buildListingFormData({ form, photos }) {
-  const fd = new FormData();
-
-  // Champs véhicule
-  fd.append("title", form.title ?? "");
-  fd.append("state", form.state ?? "");
-  fd.append("brand", form.brand ?? "");
-  fd.append("model", form.model ?? "");
-  fd.append("year", String(form.year ?? ""));
-  fd.append("mileage", String(form.mileage ?? ""));
-  fd.append("fuel", form.fuel ?? "");
-  fd.append("gearbox", form.gearbox ?? "");
-  fd.append("color", form.color ?? "");
-  fd.append("body", form.body ?? "");
-  fd.append("power", String(form.power ?? ""));
-  fd.append("doors", String(form.doors ?? ""));
-  fd.append("description", form.description ?? "");
-  fd.append("price", String(form.price ?? ""));
-  fd.append("negotiable", String(!!form.negotiable));
-
-  // Champs contact (⚠️ même noms que ton backend)
-  fd.append("contactFullName", form.fullName ?? "");
-  fd.append("contactPhone", form.phone ?? "");
-  fd.append("gov", form.gov ?? "");
-  fd.append("city", form.city ?? "");
-
-  // Photos (⚠️ fieldname: "photos")
-  (photos || []).forEach((p) => {
-    const file = p?.file || p; // accepte {file,url} ou File direct
-    if (file) fd.append("photos", file);
-  });
-
-  return fd;
+function authHeaders() {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-/**
- * Crée une annonce
- * @param {Object} args
- * @param {Object} args.form - ton state form
- * @param {Array}  args.photos - ton state photos
- */
-export function createListing({ form, photos }) {
-  const fd = buildListingFormData({ form, photos });
+// Convertir "/uploads/xxx.jpg" -> url complète
+export function toBackendImage(url) {
+  if (!url) return "";
+  if (url.startsWith("http")) return url;
+  return `${BACKEND_URL}${url}`;
+}
 
-  // ✅ IMPORTANT: le path DOIT être /api/listings (pas /listings)
-  return apiRequest("/api/listings", {
+export async function createListing({ form, photos }) {
+  const fd = new FormData();
+
+  Object.entries(form).forEach(([k, v]) => {
+    fd.append(k, typeof v === "boolean" ? String(v) : (v ?? ""));
+  });
+
+  photos.forEach((p) => fd.append("photos", p.file));
+
+  const res = await fetch(`${API_URL}/listings`, {
     method: "POST",
+    headers: { ...authHeaders() },
     body: fd,
   });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.message || "Erreur publication");
+  return data.listing;
+}
+
+export async function getMyListings() {
+  const res = await fetch(`${API_URL}/listings/me`, {
+    headers: { ...authHeaders() },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.message || "Erreur chargement");
+  return data.listings;
+}
+
+export async function getListingById(id) {
+  const res = await fetch(`${API_URL}/listings/${id}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.message || "Annonce introuvable");
+  return data.listing;
+}
+export async function updateListing(id, { form, newPhotos, keptPhotos }) {
+  const fd = new FormData();
+
+  Object.entries(form).forEach(([k, v]) => {
+    fd.append(k, typeof v === "boolean" ? String(v) : (v ?? ""));
+  });
+
+  fd.append("keptPhotos", JSON.stringify(keptPhotos || []));
+
+  (newPhotos || []).forEach((p) => fd.append("photos", p.file));
+
+  const res = await fetch(`${API_URL}/listings/${id}`, {
+    method: "PATCH",
+    headers: { ...authHeaders() },
+    body: fd,
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.message || "Erreur modification");
+  return data.listing;
+}
+
+export async function deleteListing(id) {
+  const token = localStorage.getItem("token");
+
+  const res = await fetch(`${API_URL}/listings/${id}`, {  // ✅ PAS /api/listings
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.message || "Erreur suppression");
+  }
+
+  return data;
 }

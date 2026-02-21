@@ -15,11 +15,11 @@ const listingSchema = new mongoose.Schema(
     fuel: { type: String, required: true },
     gearbox: { type: String, required: true },
 
-    color: { type: String },
-    body: { type: String },
-    power: { type: Number },
-    doors: { type: Number },
-    description: { type: String },
+    color: { type: String, default: "" },
+    body: { type: String, default: "" },
+    power: { type: Number, default: null },
+    doors: { type: Number, default: null },
+    description: { type: String, default: "" },
 
     price: { type: Number, required: true },
     negotiable: { type: Boolean, default: true },
@@ -27,9 +27,12 @@ const listingSchema = new mongoose.Schema(
     contactFullName: { type: String, required: true },
     contactPhone: { type: String, required: true },
     gov: { type: String, required: true },
-    city: { type: String },
+    city: { type: String, default: "" },
 
-    photos: [{ type: String }], // chemins fichiers
+    photos: [{ type: String, default: [] }], // ✅ "/uploads/xxx.jpg"
+
+    status: { type: String, default: "Pending" }, // optionnel
+    views: { type: Number, default: 0 },          // optionnel
   },
   { timestamps: true }
 );

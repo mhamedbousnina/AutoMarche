@@ -240,7 +240,7 @@ async function removeAvatar() {
           <div className="h-10 w-10 rounded-xl bg-yellow-400 grid place-items-center">
             <User className="h-5 w-5 text-slate-900" />
           </div>
-          <h1 className="text-3xl font-extrabold">Mes informations</h1>
+          <h1 className="text-3xl font-extrabold">Mes Informations</h1>
         </div>
       </div>
 

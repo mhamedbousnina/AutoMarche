@@ -9,6 +9,7 @@ import {
     Camera,
 } from "lucide-react";
 import { createListing } from "../apis/listings";
+import { useNavigate } from "react-router-dom";
 
 const TUNISIA_GOVS = [
     "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul", "Zaghouan", "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana",
@@ -44,6 +45,7 @@ export default function ListingPage() {
     const maxPhotos = 10;
     const [showSuccess, setShowSuccess] = useState(false);
     const [errors, setErrors] = useState({});
+    const navigate = useNavigate();
 
     const [form, setForm] = useState({
         title: "",
@@ -150,7 +152,7 @@ export default function ListingPage() {
         return Object.keys(newErrors).length === 0;
     }
 
-  async function onSubmit(e) {
+ async function onSubmit(e) {
   e.preventDefault();
 
   const isValid = validateForm();
@@ -166,10 +168,28 @@ export default function ListingPage() {
   }
 
   try {
-    const data = await createListing({ form, photos });
+    const payloadForm = {
+      ...form,
+      contactFullName: form.fullName,
+      contactPhone: form.phone,
+    };
+
+    delete payloadForm.fullName;
+    delete payloadForm.phone;
+
+    await createListing({ form: payloadForm, photos });
+
+    // ✅ Afficher message succès
     setShowSuccess(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => setShowSuccess(false), 4000);
+
+    // ✅ Redirection après 2 secondes
+    setTimeout(() => {
+      navigate("/dashboard", {
+        state: { tab: "ads", refresh: Date.now() },
+      });
+    }, 2000);
+
   } catch (err) {
     alert(err.message || "Erreur lors de la publication");
   }
@@ -743,9 +763,7 @@ export default function ListingPage() {
                                 </div>
                             </div>
 
-                            <div className="mt-6 text-xs text-slate-500">
-                                Astuce : une description honnête (même les petits défauts) évite les pertes de temps.
-                            </div>
+                           
                         </div>
                     </aside>
                 </div>

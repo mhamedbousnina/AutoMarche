@@ -201,7 +201,7 @@ export default function MyMessagesContent() {
             <MessageSquare className="h-5 w-5 text-slate-900" />
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white">
-            Mes messages
+            Mes Messages
           </h1>
         </div>
       </div>

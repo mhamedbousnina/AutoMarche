@@ -82,7 +82,7 @@ export default function MyFavoritesContent({
             <div className="h-10 w-10 rounded-xl bg-yellow-400 grid place-items-center">
               <Heart className="h-5 w-5 text-slate-900" />
             </div>
-            <h1 className="text-3xl font-extrabold">Mes favoris</h1>
+            <h1 className="text-3xl font-extrabold">Mes Favoris</h1>
           </div>
         </div>
       </div>
