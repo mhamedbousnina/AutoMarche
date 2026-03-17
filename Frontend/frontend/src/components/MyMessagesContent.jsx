@@ -1,7 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { Trash2, MessageSquare, Send, Car } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 function Avatar({ name }) {
+  const navigate = useNavigate();
+
   const initials = (name || "?")
     .split(" ")
     .filter(Boolean)
@@ -14,7 +18,9 @@ function Avatar({ name }) {
       {initials || "??"}
     </div>
   );
+
 }
+
 
 function NewBadge() {
   return (
@@ -24,7 +30,7 @@ function NewBadge() {
   );
 }
 
-function ConversationRow({ conv, isActive, onOpen, onDelete }) {
+function ConversationRow({ conv, isActive, onOpen, onDelete, }) {
   return (
     <div
       className={[
@@ -32,8 +38,8 @@ function ConversationRow({ conv, isActive, onOpen, onDelete }) {
         isActive
           ? "bg-blue-50 border-blue-200"
           : conv.isNew
-          ? "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
-          : "bg-white border-slate-200 hover:bg-slate-50",
+            ? "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
+            : "bg-white border-slate-200 hover:bg-slate-50",
       ].join(" ")}
     >
       <div
@@ -93,53 +99,23 @@ function ChatBubble({ mine, text, when }) {
 }
 
 export default function MyMessagesContent() {
-  const initialConversations = useMemo(
-    () => [
+  const location = useLocation();
+  const { sellerName, car } = location.state || {};
+
+  const initialConversations = useMemo(() => {
+    if (!sellerName) return [];
+
+    return [
       {
         id: "1",
-        fromName: "Karim B.",
-        preview: "Bonjour, est-ce que la voiture est encore disponible ?",
-        when: "il y a 2 h",
+        fromName: sellerName,
+        preview: "Nouvelle conversation",
+        when: "à l’instant",
         isNew: true,
-        messages: [
-          { id: "m1", mine: false, text: "Bonjour, est-ce que la voiture est encore disponible ?", when: "16:20" },
-          { id: "m2", mine: true, text: "Bonjour oui elle est toujours disponible.", when: "16:22" },
-        ],
+        messages: [],
       },
-      {
-        id: "2",
-        fromName: "Salma T.",
-        preview: "Le prix est-il négociable ? Je suis intéressé.",
-        when: "il y a 5 h",
-        isNew: true,
-        messages: [
-          { id: "m1", mine: false, text: "Le prix est-il négociable ? Je suis intéressé.", when: "11:05" },
-        ],
-      },
-      {
-        id: "3",
-        fromName: "Mohamed A.",
-        preview: "Merci pour les infos, je vais réfléchir.",
-        when: "Hier",
-        isNew: false,
-        messages: [
-          { id: "m1", mine: false, text: "Merci pour les infos, je vais réfléchir.", when: "19:10" },
-        ],
-      },
-      {
-        id: "4",
-        fromName: "Leila R.",
-        preview: "Est-ce que vous acceptez un échange ?",
-        when: "il y a 2 j",
-        isNew: false,
-        messages: [
-          { id: "m1", mine: false, text: "Est-ce que vous acceptez un échange ?", when: "10:15" },
-          { id: "m2", mine: true, text: "Bonjour, ça dépend de quoi. Quel modèle ?", when: "10:18" },
-        ],
-      },
-    ],
-    []
-  );
+    ];
+  }, [sellerName]);
 
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState(initialConversations?.[0]?.id || null);
@@ -159,13 +135,15 @@ export default function MyMessagesContent() {
   }
 
   function deleteConversation(convId) {
-    setConversations((prev) => prev.filter((c) => c.id !== convId));
+    setConversations((prev) => {
+      const updated = prev.filter((c) => c.id !== convId);
 
-    // Si on supprime la conversation active, on sélectionne une autre
-    if (convId === activeId) {
-      const remaining = conversations.filter((c) => c.id !== convId);
-      setActiveId(remaining?.[0]?.id || null);
-    }
+      if (convId === activeId) {
+        setActiveId(updated?.[0]?.id || null);
+      }
+
+      return updated;
+    });
   }
 
   function sendMessage() {
@@ -308,21 +286,41 @@ export default function MyMessagesContent() {
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                <div className="h-36 bg-slate-200 grid place-items-center text-slate-500 text-sm">
-                  Image voiture
+                <div className="h-36 rounded-2xl overflow-hidden bg-slate-200">
+                  {car?.photos?.length ? (
+                    <img
+                      src={car.photos[0]}
+                      alt={car.title || "Image voiture"}
+                      className="w-full h-full object-cover object-center"
+                    />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center text-slate-500 text-sm">
+                      Image voiture
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-4 space-y-2">
-                  <div className="font-extrabold text-slate-900">Audi A4 2.0 TDI</div>
-                  <div className="text-blue-600 font-bold">95 000 DT</div>
-
-                  <div className="pt-2 space-y-1 text-sm text-slate-600">
-                    <div>📅 2012</div>
-                    <div>🛣️ 40 000 km</div>
-                    <div>📍 Bizerte</div>
+                  <div className="font-extrabold text-slate-900">
+                    {car?.title || "Aucune annonce"}
                   </div>
 
-                  <button className="w-full h-11 rounded-xl bg-amber-400 text-slate-900 font-semibold flex items-center justify-center gap-2 hover:bg-amber-500 transition">
+                  <div className="text-blue-600 font-bold">
+                    {car?.price ? `${car.price} DT` : ""}
+                  </div>
+
+                  <div className="pt-2 space-y-1 text-sm text-slate-600">
+                    <div>📅 {car?.year || "-"}</div>
+                    <div>🛣️ {car?.km || "-"}</div>
+                    <div>📍 {car?.location || "-"}</div>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      car?.id && navigate(`/annonce/${car.id}`) // navigation vers la page détail
+                    }
+                    className="w-full h-11 rounded-xl bg-amber-400 text-slate-900 font-semibold flex items-center justify-center gap-2 hover:bg-amber-500 transition"
+                  >
                     Voir l’annonce
                   </button>
                 </div>

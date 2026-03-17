@@ -10,6 +10,7 @@ import ListingPage from "./pages/ListingPage";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import AnnonceDetail from "./pages/AnnonceDetail";
 import EditListingPage from "./pages/EditListingPage";
+import MyMessagesContent from "./components/MyMessagesContent";
 
 export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="*" element={<div className="p-6">Page introuvable</div>} />
         <Route path="/annonce/:id/modifier" element={<EditListingPage />} />
         <Route path="/annonce/:id/edit" element={<EditListingPage />} />
+         <Route path="messages" element={<MyMessagesContent />} />
       </Routes>
 
       <AuthModal
