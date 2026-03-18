@@ -508,15 +508,29 @@ export default function AnnonceDetail() {
                         tab: "messages",
                         sellerName: listing.contactFullName,
                         car: {
-                          id: listing.id, 
+                          _id: listing._id || listing.id,
+                          id: listing._id || listing.id,
                           title: listing.title,
                           price: listing.price,
                           year: listing.year,
                           km: listing.mileage,
                           location: listing.gov + (listing.city ? `, ${listing.city}` : ""),
                           photos: listing.photos.map(p => toBackendImage(p)),
-                          
-                        },
+                                                  initialConversation: {
+                          id: `conv_${listing._id || listing.id}`,
+                          fromName: listing.contactFullName,
+                          preview: "Nouvelle discussion",
+                          when: "à l’instant",
+                          isNew: true,
+                          messages: [
+                            {
+                              id: `m_init_${Date.now()}`,
+                              mine: false,
+                              text: "Bonjour, je suis intéressé(e) par votre annonce.",
+                              when: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                            },
+                          ],
+                        },                        },
                       },
                     })
                   }

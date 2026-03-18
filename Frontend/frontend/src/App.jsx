@@ -66,7 +66,7 @@ export default function App() {
         <Route path="*" element={<div className="p-6">Page introuvable</div>} />
         <Route path="/annonce/:id/modifier" element={<EditListingPage />} />
         <Route path="/annonce/:id/edit" element={<EditListingPage />} />
-         <Route path="messages" element={<MyMessagesContent />} />
+        <Route path="/messages" element={<MyMessagesContent />} />
       </Routes>
 
       <AuthModal

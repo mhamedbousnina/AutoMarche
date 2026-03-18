@@ -24,8 +24,10 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/favorites", favoriteRoutes);
+import messageRoutes from "./routes/message.js";
 
+app.use("/api/favorites", favoriteRoutes);
+app.use("/api/messages", messageRoutes);
 
 app.use(errorHandler);
 
