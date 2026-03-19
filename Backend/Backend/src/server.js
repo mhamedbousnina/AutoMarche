@@ -14,50 +14,49 @@ async function start() {
 
   const io = new Server(server, {
     cors: {
-      origin: process.env.CORS_ORIGIN || "*",
+      origin: "*",
       methods: ["GET", "POST"],
-      credentials: true,
     },
   });
 
-  app.set("io", io);
-
+  // 🔥 SOCKET
   io.on("connection", (socket) => {
     console.log("✅ Socket connecté:", socket.id);
 
+    // 📥 JOIN ROOM
     socket.on("joinRoom", async ({ roomId }) => {
       if (!roomId) return;
+
       socket.join(roomId);
-      console.log(`📥 ${socket.id} joined ${roomId}`);
 
       try {
         const messages = await Message.find({ roomId }).sort({ createdAt: 1 });
-        socket.emit("history", messages);
+
+        // 🔥 FORMAT FRONT
+        const formatted = messages.map((m) => ({
+          id: m._id,
+          text: m.text,
+          from: m.from,
+          to: m.to,
+          createdAt: m.createdAt,
+        }));
+
+        socket.emit("history", formatted);
       } catch (err) {
-        console.error("❌ Error fetching history:", err);
+        console.error("❌ history error:", err);
       }
     });
 
-    socket.on("leaveRoom", async ({ roomId }) => {
-      if (!roomId) return;
+    // 🚪 LEAVE
+    socket.on("leaveRoom", ({ roomId }) => {
       socket.leave(roomId);
-      console.log(`🔴 ${socket.id} left ${roomId}`);
-
-      // Optionnel : effacer la conversation quand on quitte la room
-      if (roomId) {
-        try {
-          await Message.deleteMany({ roomId });
-          console.log(`🗑️ Conversation effacée pour room ${roomId}`);
-        } catch (err) {
-          console.error("❌ Erreur suppression conversation:", err);
-        }
-      }
     });
 
+    // 💬 SEND MESSAGE
     socket.on("sendMessage", async (data) => {
-      if (!data?.roomId || !data?.text) return;
-
       try {
+        if (!data?.roomId || !data?.text) return;
+
         const message = await Message.create({
           roomId: data.roomId,
           text: data.text,
@@ -66,27 +65,23 @@ async function start() {
           listingId: data.listingId,
         });
 
-        io.to(data.roomId).emit("message", message);
+        const formatted = {
+          id: message._id,
+          text: message.text,
+          from: message.from,
+          to: message.to,
+          createdAt: message.createdAt,
+        };
+
+        // 🔥 envoi temps réel
+        io.to(data.roomId).emit("message", formatted);
       } catch (err) {
-        console.error("❌ Error sending message:", err);
+        console.error("❌ sendMessage error:", err);
       }
     });
 
-    socket.on("disconnect", async (reason) => {
-      console.log("❌ Socket déconnecté:", socket.id, "reason:", reason);
-
-      // Effacer toutes les conversations des rooms jointes par ce socket
-      const joinedRooms = Array.from(socket.rooms).filter((room) => room !== socket.id);
-      if (joinedRooms.length > 0) {
-        try {
-          await Promise.all(
-            joinedRooms.map((roomId) => Message.deleteMany({ roomId }))
-          );
-          console.log(`🗑️ Conversations effacées pour rooms: ${joinedRooms.join(", ")}`);
-        } catch (err) {
-          console.error("❌ Erreur suppression lors de disconnect:", err);
-        }
-      }
+    socket.on("disconnect", () => {
+      console.log("❌ Socket déconnecté:", socket.id);
     });
   });
 
@@ -95,7 +90,4 @@ async function start() {
   });
 }
 
-start().catch((e) => {
-  console.error("❌ Startup error:", e);
-  process.exit(1);
-});
+start();

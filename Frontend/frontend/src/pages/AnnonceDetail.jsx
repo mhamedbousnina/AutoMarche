@@ -506,6 +506,7 @@ export default function AnnonceDetail() {
                     navigate("/dashboard", {
                       state: {
                         tab: "messages",
+                        sellerId: listing.sellerId || listing.userId,
                         sellerName: listing.contactFullName,
                         car: {
                           _id: listing._id || listing.id,

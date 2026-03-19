@@ -1,14 +1,16 @@
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { Trash2, MessageSquare, Send, Car } from "lucide-react";
-import { useLocation } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
-function Avatar({ name }) {
-  
+// ⚠️ simulate user connecté
+const currentUser = {
+  id: "seller_001",
+};
 
+function Avatar({ name }) {
   const initials = (name || "?")
     .split(" ")
     .filter(Boolean)
@@ -21,9 +23,7 @@ function Avatar({ name }) {
       {initials || "??"}
     </div>
   );
-
 }
-
 
 function NewBadge() {
   return (
@@ -33,7 +33,7 @@ function NewBadge() {
   );
 }
 
-function ConversationRow({ conv, isActive, onOpen, onDelete, }) {
+function ConversationRow({ conv, isActive, onOpen, onDelete }) {
   return (
     <div
       className={[
@@ -41,8 +41,8 @@ function ConversationRow({ conv, isActive, onOpen, onDelete, }) {
         isActive
           ? "bg-blue-50 border-blue-200"
           : conv.isNew
-            ? "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
-            : "bg-white border-slate-200 hover:bg-slate-50",
+          ? "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
+          : "bg-white border-slate-200 hover:bg-slate-50",
       ].join(" ")}
     >
       <div
@@ -66,11 +66,9 @@ function ConversationRow({ conv, isActive, onOpen, onDelete, }) {
           {conv.when}
         </div>
 
-        {/* Supprimer depuis la liste (optionnel) */}
         <button
           onClick={() => onDelete?.(conv.id)}
           className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-red-50 grid place-items-center transition"
-          title="Supprimer la conversation"
         >
           <Trash2 className="h-4 w-4 text-red-500" />
         </button>
@@ -105,59 +103,32 @@ export default function MyMessagesContent() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const storedSession = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return JSON.parse(localStorage.getItem("my-messages-session"));
-    } catch {
-      return null;
-    }
-  }, []);
-
   const locationState = location.state || {};
-  const car = locationState.car || storedSession?.car || null;
-  const sellerName = locationState.sellerName || storedSession?.sellerName || "";
-  const initialConversation = locationState.initialConversation || storedSession?.initialConversation || null;
+  const car = locationState.car || null;
+  const sellerName = locationState.sellerName || "";
+  const sellerId = locationState.sellerId || "seller_001"; // 🔥 IMPORTANT
 
-  const getStorageKey = (roomId) => `messages_${roomId}`;
-  const roomId = (car?._id || car?.id) ? `listing:${car?._id || car?.id}` : null;
+  // ✅ ROOM PRIVÉ FIX
+  const roomId = useMemo(() => {
+  if (!car?._id) return null;
 
-  const initialConversations = useMemo(() => {
-    if (!sellerName) return [];
+  const ids = [currentUser.id, sellerId].sort(); // 🔥 clé
+  return `chat_${car._id}_${ids[0]}_${ids[1]}`;
+}, [car, sellerId]);
 
-    const saved = roomId ? localStorage.getItem(getStorageKey(roomId)) : null;
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Erreur parsing messages saved", e);
-      }
-    }
+  const [conversations, setConversations] = useState([
+    {
+      id: "1",
+      fromName: sellerName,
+      preview: "Nouvelle conversation",
+      when: "à l’instant",
+      isNew: true,
+      messages: [],
+    },
+  ]);
 
-    if (initialConversation) {
-      return [initialConversation];
-    }
-
-    if (storedSession?.conversations) {
-      return storedSession.conversations;
-    }
-
-    return [
-      {
-        id: "1",
-        fromName: sellerName,
-        preview: "Nouvelle conversation",
-        when: "à l’instant",
-        isNew: true,
-        messages: [],
-      },
-    ];
-  }, [sellerName, roomId, initialConversation, storedSession]);
-
-  const [conversations, setConversations] = useState(initialConversations);
-  const [activeId, setActiveId] = useState(initialConversations?.[0]?.id || null);
+  const [activeId, setActiveId] = useState("1");
   const [draft, setDraft] = useState("");
-  const [connected, setConnected] = useState(false);
   const socketRef = useRef(null);
 
   const activeConv = useMemo(
@@ -165,109 +136,104 @@ export default function MyMessagesContent() {
     [conversations, activeId]
   );
 
+  
+
+  // ✅ SOCKET FIX
   useEffect(() => {
-    if (!roomId) return;
-    localStorage.setItem(getStorageKey(roomId), JSON.stringify(conversations));
-    localStorage.setItem(
-      "my-messages-session",
-      JSON.stringify({ sellerName, car, conversations, initialConversation })
-    );
-  }, [conversations, roomId, sellerName, car, initialConversation]);
+  if (!roomId) return;
 
-  useEffect(() => {
-    if (!roomId) return;
+  const socket = io(SOCKET_URL, { transports: ["websocket"] });
+  socketRef.current = socket;
 
-    const socket = io(SOCKET_URL, { transports: ["websocket"] });
-    socketRef.current = socket;
+  socket.on("connect", () => {
+    socket.emit("joinRoom", { roomId });
+  });
 
-    socket.on("connect", () => {
-      setConnected(true);
-      socket.emit("joinRoom", { roomId });
-    });
-
-    socket.on("disconnect", () => {
-      setConnected(false);
-    });
-
-    socket.on("message", (message) => {
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeId
-            ? {
-                ...c,
-                messages: [...c.messages, message],
-                preview: message.text,
-                when: "à l’instant",
-              }
-            : c
-        )
-      );
-    });
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.emit("leaveRoom", { roomId });
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-    };
-  }, [roomId, activeId]);
-
-  function openConversation(conv) {
-    setActiveId(conv.id);
-    // Optionnel : marquer comme lu
-    setConversations((prev) =>
-      prev.map((c) => (c.id === conv.id ? { ...c, isNew: false } : c))
-    );
-  }
-
-  function deleteConversation(convId) {
-    setConversations((prev) => {
-      const updated = prev.filter((c) => c.id !== convId);
-
-      if (convId === activeId) {
-        setActiveId(updated?.[0]?.id || null);
-      }
-
-      return updated;
-    });
-  }
-
-  function sendMessage() {
-    const text = draft.trim();
-    if (!text || !activeConv) return;
-
-    const newMsg = {
-      id: `m_${Date.now()}`,
-      mine: true,
-      text,
-      when: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
+  socket.on("message", (message) => {
     setConversations((prev) =>
       prev.map((c) => {
-        if (c.id !== activeConv.id) return c;
+        if (c.id !== activeId) return c;
+
         return {
           ...c,
-          preview: text,
+          messages: [
+            ...c.messages,
+            {
+              id: message.id || `m_${Date.now()}`,
+              text: message.text,
+              mine: message.from?.id === currentUser.id,
+              when: new Date(message.createdAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            },
+          ],
+          preview: message.text,
           when: "à l’instant",
-          messages: [...c.messages, newMsg],
         };
       })
     );
+  });
 
-    if (socketRef.current && roomId) {
-      socketRef.current.emit("sendMessage", {
-        roomId,
-        from: "buyer",
-        to: "seller",
-        text,
-        listingId: car?._id || car?.id,
-        createdAt: new Date().toISOString(),
-      });
-    }
+  return () => {
+    socket.disconnect(); // ❗ remove leaveRoom
+  };
+}, [roomId, activeId]);
 
-    setDraft("");
+  function sendMessage() {
+  const text = draft.trim();
+  if (!text || !activeConv || !socketRef.current) return;
+
+  const messageData = {
+    id: `m_${Date.now()}`,
+    roomId,
+    text,
+    from: currentUser,
+    to: {
+      id: sellerId,
+      name: sellerName,
+    },
+    listingId: car?._id,
+    createdAt: new Date().toISOString(),
+  };
+
+  // ✅ afficher direct (optimistic UI)
+  setConversations((prev) =>
+    prev.map((c) => {
+      if (c.id !== activeConv.id) return c;
+
+      return {
+        ...c,
+        preview: text,
+        when: "à l’instant",
+        messages: [
+          ...c.messages,
+          {
+            id: messageData.id,
+            text,
+            mine: true,
+            when: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          },
+        ],
+      };
+    })
+  );
+
+  // ✅ envoyer socket
+  socketRef.current.emit("sendMessage", messageData);
+
+  setDraft("");
+}
+
+  function openConversation(conv) {
+    setActiveId(conv.id);
+  }
+
+  function deleteConversation(convId) {
+    setConversations((prev) => prev.filter((c) => c.id !== convId));
   }
 
   return (
