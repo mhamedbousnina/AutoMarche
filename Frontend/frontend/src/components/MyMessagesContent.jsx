@@ -1,14 +1,10 @@
-import React, { useMemo, useEffect, useState, useRef } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Trash2, MessageSquare, Send, Car } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
-
-// ⚠️ simulate user connecté
-const currentUser = {
-  id: "seller_001",
-};
+// ✅ UNE SEULE connexion socket
+const socket = io("http://localhost:5000");
 
 function Avatar({ name }) {
   const initials = (name || "?")
@@ -37,40 +33,32 @@ function ConversationRow({ conv, isActive, onOpen, onDelete }) {
   return (
     <div
       className={[
-        "w-full border rounded-xl p-3 transition flex items-center justify-between gap-3",
+        "w-full border rounded-xl p-3 flex items-center justify-between gap-3",
         isActive
           ? "bg-blue-50 border-blue-200"
           : conv.isNew
-          ? "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
-          : "bg-white border-slate-200 hover:bg-slate-50",
+          ? "bg-blue-50/60 border-blue-100"
+          : "bg-white border-slate-200",
       ].join(" ")}
     >
       <div
-        className="flex items-start gap-3 min-w-0 cursor-pointer flex-1"
-        onClick={() => onOpen?.(conv)}
+        className="flex items-start gap-3 flex-1 cursor-pointer"
+        onClick={() => onOpen(conv)}
       >
         <Avatar name={conv.fromName} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="font-semibold text-slate-900 truncate">
-              {conv.fromName}
-            </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="font-semibold">{conv.fromName}</div>
             {conv.isNew && <NewBadge />}
           </div>
-          <div className="text-sm text-slate-600 truncate">{conv.preview}</div>
+          <div className="text-sm text-slate-600">{conv.preview}</div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        <div className="text-xs text-slate-400 whitespace-nowrap">
-          {conv.when}
-        </div>
-
-        <button
-          onClick={() => onDelete?.(conv.id)}
-          className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-red-50 grid place-items-center transition"
-        >
-          <Trash2 className="h-4 w-4 text-red-500" />
+      <div className="flex items-center gap-2">
+        <div className="text-xs text-slate-400">{conv.when}</div>
+        <button onClick={() => onDelete(conv.id)}>
+          <Trash2 className="text-red-500" />
         </button>
       </div>
     </div>
@@ -79,161 +67,133 @@ function ConversationRow({ conv, isActive, onOpen, onDelete }) {
 
 function ChatBubble({ mine, text, when }) {
   return (
-    <div className={["w-full flex", mine ? "justify-end" : "justify-start"].join(" ")}>
+    <div className={mine ? "text-right" : "text-left"}>
       <div
-        className={[
-          "max-w-[78%] rounded-2xl px-4 py-3 border",
+        className={
           mine
-            ? "bg-slate-900 text-white border-slate-900"
-            : "bg-white text-slate-900 border-slate-200",
-        ].join(" ")}
+            ? "inline-block bg-black text-white p-2 rounded"
+            : "inline-block bg-gray-200 p-2 rounded"
+        }
       >
-        <div className="text-sm leading-relaxed">{text}</div>
-        {when && (
-          <div className={["text-[11px] mt-1", mine ? "text-white/60" : "text-slate-400"].join(" ")}>
-            {when}
-          </div>
-        )}
+        {text}
+        <div className="text-xs">{when}</div>
       </div>
     </div>
   );
 }
 
 export default function MyMessagesContent() {
-  const navigate = useNavigate();
   const location = useLocation();
+  const navState = location.state || {};
 
-  const locationState = location.state || {};
-  const car = locationState.car || null;
-  const sellerName = locationState.sellerName || "";
-  const sellerId = locationState.sellerId || "seller_001"; // 🔥 IMPORTANT
+  const initialConversations = useMemo(() => [], []);
 
-  // ✅ ROOM PRIVÉ FIX
-  const roomId = useMemo(() => {
-  if (!car?._id) return null;
-
-  const ids = [currentUser.id, sellerId].sort(); // 🔥 clé
-  return `chat_${car._id}_${ids[0]}_${ids[1]}`;
-}, [car, sellerId]);
-
-  const [conversations, setConversations] = useState([
-    {
-      id: "1",
-      fromName: sellerName,
-      preview: "Nouvelle conversation",
-      when: "à l’instant",
-      isNew: true,
-      messages: [],
-    },
-  ]);
-
-  const [activeId, setActiveId] = useState("1");
-  const [draft, setDraft] = useState("");
-  const socketRef = useRef(null);
-
-  const activeConv = useMemo(
-    () => conversations.find((c) => c.id === activeId) || null,
-    [conversations, activeId]
-  );
-
-  
-
-  // ✅ SOCKET FIX
-  useEffect(() => {
-  if (!roomId) return;
-
-  const socket = io(SOCKET_URL, { transports: ["websocket"] });
-  socketRef.current = socket;
-
-  socket.on("connect", () => {
-    socket.emit("joinRoom", { roomId });
+  const [conversations, setConversations] = useState(() => {
+    if (navState?.car?.initialConversation) {
+      return [navState.car.initialConversation, ...initialConversations];
+    }
+    return initialConversations;
   });
 
-  socket.on("message", (message) => {
+  const [activeId, setActiveId] = useState(() => {
+    return navState?.car?.initialConversation?.id || null;
+  });
+
+  const [selectedCar, setSelectedCar] = useState(() => navState?.car || null);
+  const [draft, setDraft] = useState("");
+
+  const activeConv = conversations.find((c) => c.id === activeId);
+
+  // ✅ rejoindre conversation
+  useEffect(() => {
+    if (activeId) {
+      socket.emit("join_conversation", activeId);
+    }
+  }, [activeId]);
+
+  // ✅ recevoir messages temps réel
+  useEffect(() => {
+    socket.on("receive_message", (message) => {
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== message.conversationId) return c;
+
+          return {
+            ...c,
+            messages: [...c.messages, message],
+          };
+        })
+      );
+    });
+
+    return () => socket.off("receive_message");
+  }, []);
+
+  function openConversation(conv) {
+    setActiveId(conv.id);
+
+    if (navState?.car && conv.id === navState.car.initialConversation?.id) {
+      setSelectedCar(navState.car);
+    }
+  }
+
+  function deleteConversation(convId) {
+    setConversations((prev) => prev.filter((c) => c.id !== convId));
+
+    if (convId === activeId) {
+      const remaining = conversations.filter((c) => c.id !== convId);
+      setActiveId(remaining?.[0]?.id || null);
+    }
+  }
+
+  // ✅ envoyer message temps réel
+ function sendMessage() {
+  if (!draft.trim() || !activeId) return;
+
+  const raw = localStorage.getItem("user");
+  if (!raw) {
+    console.error("❌ user absent localStorage");
+    return;
+  }
+
+  const user = JSON.parse(raw);
+
+  if (!user?._id) {
+    console.error("❌ user._id manquant", user);
+    return;
+  }
+
+  const message = {
+    id: Date.now(),
+    conversationId: activeId,
+    senderId: user._id,
+    mine: true,
+    text: draft,
+    when: "maintenant",
+  };
+
+  socket.emit("send_message", {
+    conversationId: activeId,
+    senderId: user._id,
+    text: draft,
+  });
+
+ 
+
+
+    // affichage immédiat
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id !== activeId) return c;
 
         return {
           ...c,
-          messages: [
-            ...c.messages,
-            {
-              id: message.id || `m_${Date.now()}`,
-              text: message.text,
-              mine: message.from?.id === currentUser.id,
-              when: new Date(message.createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            },
-          ],
-          preview: message.text,
-          when: "à l’instant",
+          messages: [...c.messages, message],
         };
       })
     );
-  });
 
-  return () => {
-    socket.disconnect(); // ❗ remove leaveRoom
-  };
-}, [roomId, activeId]);
-
-  function sendMessage() {
-  const text = draft.trim();
-  if (!text || !activeConv || !socketRef.current) return;
-
-  const messageData = {
-    id: `m_${Date.now()}`,
-    roomId,
-    text,
-    from: currentUser,
-    to: {
-      id: sellerId,
-      name: sellerName,
-    },
-    listingId: car?._id,
-    createdAt: new Date().toISOString(),
-  };
-
-  // ✅ afficher direct (optimistic UI)
-  setConversations((prev) =>
-    prev.map((c) => {
-      if (c.id !== activeConv.id) return c;
-
-      return {
-        ...c,
-        preview: text,
-        when: "à l’instant",
-        messages: [
-          ...c.messages,
-          {
-            id: messageData.id,
-            text,
-            mine: true,
-            when: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-        ],
-      };
-    })
-  );
-
-  // ✅ envoyer socket
-  socketRef.current.emit("sendMessage", messageData);
-
-  setDraft("");
-}
-
-  function openConversation(conv) {
-    setActiveId(conv.id);
-  }
-
-  function deleteConversation(convId) {
-    setConversations((prev) => prev.filter((c) => c.id !== convId));
+    setDraft("");
   }
 
   return (
@@ -301,16 +261,21 @@ export default function MyMessagesContent() {
 
               {/* Messages */}
               <div className="flex-1 overflow-auto px-5 py-5 space-y-3 bg-slate-50">
-                {activeConv ? (
-                  activeConv.messages.map((m) => (
-                    <ChatBubble key={m.id} mine={m.mine} text={m.text} when={m.when} />
-                  ))
-                ) : (
-                  <div className="h-full grid place-items-center text-slate-500">
-                    Sélectionne une conversation
-                  </div>
-                )}
-              </div>
+  {activeConv ? (
+    activeConv.messages.map((m) => (
+      <ChatBubble
+        key={m._id || m.id} // 🔥 fix
+        mine={m.mine}
+        text={m.text}
+        when={m.when}
+      />
+    ))
+  ) : (
+    <div className="h-full grid place-items-center text-slate-500">
+      Sélectionne une conversation
+    </div>
+  )}
+</div>
 
               {/* Input */}
               <div className="p-4 border-t border-slate-200 bg-white">
@@ -352,42 +317,33 @@ export default function MyMessagesContent() {
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                <div className="h-36 rounded-2xl overflow-hidden bg-slate-200">
-                  {car?.photos?.length ? (
-                    <img
-                      src={car.photos[0]}
-                      alt={car.title || "Image voiture"}
-                      className="w-full h-full object-cover object-center"
-                    />
-                  ) : (
-                    <div className="w-full h-full grid place-items-center text-slate-500 text-sm">
-                      Image voiture
-                    </div>
-                  )}
-                </div>
+                {selectedCar?.photos?.[0] ? (
+                  <img
+                    src={selectedCar.photos[0]}
+                    alt="car"
+                    className="w-full h-36 object-cover"
+                  />
+                ) : (
+                  <div className="h-36 bg-slate-200 grid place-items-center text-slate-500 text-sm">
+                    Image voiture
+                  </div>
+                )}
 
                 <div className="p-4 space-y-2">
                   <div className="font-extrabold text-slate-900">
-                    {car?.title || "Aucune annonce"}
+                    {selectedCar?.title || "—"}
                   </div>
-
                   <div className="text-blue-600 font-bold">
-                    {car?.price ? `${car.price} DT` : ""}
+                    {selectedCar?.price || "—"} DT
                   </div>
 
                   <div className="pt-2 space-y-1 text-sm text-slate-600">
-                    <div>📅 {car?.year || "-"}</div>
-                    <div>🛣️ {car?.km || "-"}</div>
-                    <div>📍 {car?.location || "-"}</div>
+                    <div>📅 {selectedCar?.year || "—"}</div>
+                    <div>🛣️ {selectedCar?.km || "—"} km</div>
+                    <div>📍 {selectedCar?.location || "—"}</div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      const listingId = car?._id || car?.id;
-                      if (listingId) navigate(`/annonce/${listingId}`);
-                    }}
-                    className="w-full h-11 rounded-xl bg-amber-400 text-slate-900 font-semibold flex items-center justify-center gap-2 hover:bg-amber-500 transition"
-                  >
+                  <button className="w-full h-11 rounded-xl bg-amber-400 text-slate-900 font-semibold flex items-center justify-center gap-2 hover:bg-amber-500 transition">
                     Voir l’annonce
                   </button>
                 </div>

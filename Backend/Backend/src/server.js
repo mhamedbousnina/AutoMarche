@@ -1,93 +1,71 @@
 import "dotenv/config";
 import app from "./app.js";
 import { connectDB } from "./config/db.js";
-import http from "http";
+import { createServer } from "http";
 import { Server } from "socket.io";
-import { Message } from "./models/Message.js";
+import Message from "./models/message.js";
 
 const PORT = process.env.PORT || 5000;
 
 async function start() {
   await connectDB();
 
-  const server = http.createServer(app);
+  const httpServer = createServer(app);
 
-  const io = new Server(server, {
+  const io = new Server(httpServer, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
+      origin: process.env.CORS_ORIGIN,
+      credentials: true,
     },
   });
 
-  // 🔥 SOCKET
+  // rendre io accessible partout
+  app.set("io", io);
+
   io.on("connection", (socket) => {
-    console.log("✅ Socket connecté:", socket.id);
+    console.log("🟢 User connected:", socket.id);
 
-    // 📥 JOIN ROOM
-    socket.on("joinRoom", async ({ roomId }) => {
-      if (!roomId) return;
-
-      socket.join(roomId);
-
-      try {
-        const messages = await Message.find({ roomId }).sort({ createdAt: 1 });
-
-        // 🔥 FORMAT FRONT
-        const formatted = messages.map((m) => ({
-          id: m._id,
-          text: m.text,
-          from: m.from,
-          to: m.to,
-          createdAt: m.createdAt,
-        }));
-
-        socket.emit("history", formatted);
-      } catch (err) {
-        console.error("❌ history error:", err);
-      }
+    // rejoindre une room (conversation)
+    socket.on("join_conversation", (conversationId) => {
+      socket.join(conversationId);
     });
 
-    // 🚪 LEAVE
-    socket.on("leaveRoom", ({ roomId }) => {
-      socket.leave(roomId);
+    // envoyer message
+   socket.on("send_message", async (data) => {
+  try {
+    const { conversationId, senderId, text } = data;
+
+    if (!conversationId || !senderId || !text) {
+      console.log("❌ données invalides:", data);
+      return;
+    }
+
+    const savedMessage = await Message.create({
+      conversationId,
+      sender: senderId, // ✅ FIX
+      text: text,       // ✅ FIX
     });
 
-    // 💬 SEND MESSAGE
-    socket.on("sendMessage", async (data) => {
-      try {
-        if (!data?.roomId || !data?.text) return;
+    const populated = await savedMessage.populate("sender", "fullName");
 
-        const message = await Message.create({
-          roomId: data.roomId,
-          text: data.text,
-          from: data.from,
-          to: data.to,
-          listingId: data.listingId,
-        });
+    io.to(conversationId).emit("receive_message", populated);
 
-        const formatted = {
-          id: message._id,
-          text: message.text,
-          from: message.from,
-          to: message.to,
-          createdAt: message.createdAt,
-        };
-
-        // 🔥 envoi temps réel
-        io.to(data.roomId).emit("message", formatted);
-      } catch (err) {
-        console.error("❌ sendMessage error:", err);
-      }
-    });
+  } catch (err) {
+    console.error("❌ Error send_message:", err);
+  }
+});
 
     socket.on("disconnect", () => {
-      console.log("❌ Socket déconnecté:", socket.id);
+      console.log("🔴 User disconnected:", socket.id);
     });
   });
 
-  server.listen(PORT, () => {
-    console.log(`🔥 Server running on http://localhost:${PORT}`);
+  httpServer.listen(PORT, () => {
+    console.log(`✅ Server running on http://localhost:${PORT}`);
   });
 }
 
-start();
+start().catch((e) => {
+  console.error("❌ Startup error:", e);
+  process.exit(1);
+});

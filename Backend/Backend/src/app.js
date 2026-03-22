@@ -7,6 +7,9 @@ import fs from "fs";
 import path from "path";
 import userRoutes from "./routes/user.js";
 import favoriteRoutes from "./routes/favorite.js";
+import messageRoutes from "./routes/message.js";
+
+
 
 
 const app = express();
@@ -24,10 +27,11 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/users", userRoutes);
-import messageRoutes from "./routes/message.js";
+app.use("/api/messages", messageRoutes);
+
 
 app.use("/api/favorites", favoriteRoutes);
-app.use("/api/messages", messageRoutes);
+
 
 app.use(errorHandler);
 
