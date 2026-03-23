@@ -500,45 +500,58 @@ export default function AnnonceDetail() {
                   {showPhone ? "Masquer le numéro" : "Appeler le vendeur"}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate("/dashboard", {
-                      state: {
-                        tab: "messages",
-                        sellerId: listing.sellerId || listing.userId,
-                        sellerName: listing.contactFullName,
-                        car: {
-                          _id: listing._id || listing.id,
-                          id: listing._id || listing.id,
-                          title: listing.title,
-                          price: listing.price,
-                          year: listing.year,
-                          km: listing.mileage,
-                          location: listing.gov + (listing.city ? `, ${listing.city}` : ""),
-                          photos: listing.photos.map(p => toBackendImage(p)),
-                                                  initialConversation: {
-                          id: `conv_${listing._id || listing.id}`,
-                          fromName: listing.contactFullName,
-                          preview: "Nouvelle discussion",
-                          when: "à l’instant",
-                          isNew: true,
-                          messages: [
-                            {
-                              id: `m_init_${Date.now()}`,
-                              mine: false,
-                              text: "Bonjour, je suis intéressé(e) par votre annonce.",
-                              when: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                            },
-                          ],
-                        },                        },
-                      },
-                    })
-                  }
-                  className="w-full rounded-xl font-bold gap-2 h-12 text-base border border-slate-200 hover:bg-slate-50 flex items-center justify-center transition"
-                >
-                  <MessageCircle className="h-5 w-5" /> Envoyer un message
-                </button>
+              <button
+  type="button"
+  onClick={() => {
+    // 1. On s'assure d'avoir un ID propre (sans le préfixe "conv_")
+    const cleanId = listing._id || listing.id;
+
+    navigate("/dashboard", {
+      state: {
+        tab: "messages",
+        sellerId: listing.sellerId || listing.userId,
+        sellerName: listing.contactFullName,
+        car: {
+          _id: cleanId,
+          id: cleanId,
+          title: listing.title,
+          price: listing.price,
+          year: listing.year,
+          km: listing.mileage,
+          location: listing.gov + (listing.city ? `, ${listing.city}` : ""),
+          photos: listing.photos.map(p => toBackendImage(p)),
+          sellerId: listing.sellerId || listing.userId,
+
+          initialConversation: {
+            // ✅ ON UTILISE L'ID PUR ICI (Pas de "conv_")
+            _id: cleanId, 
+            id: cleanId,
+            fromName: listing.contactFullName,
+            preview: "Nouvelle discussion",
+            when: "à l’instant",
+            isNew: true,
+            // On initialise listingId pour que le serveur sache de quelle voiture on parle
+            listingId: cleanId, 
+            messages: [
+              {
+                _id: `m_init_${Date.now()}`,
+                mine: false,
+                text: "Bonjour, je suis intéressé(e) par votre annonce.",
+                when: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              },
+            ],
+          },
+        },
+      },
+    });
+  }}
+  className="w-full rounded-xl font-bold gap-2 h-12 text-base border border-slate-200 hover:bg-slate-50 flex items-center justify-center transition"
+>
+  <MessageCircle className="h-5 w-5" /> Envoyer un message
+</button>
 
                 {/* Numéro animé */}
                 <div

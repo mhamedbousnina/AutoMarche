@@ -6,15 +6,16 @@ const conversationSchema = new mongoose.Schema(
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+        required: true,
       },
     ],
-
     listingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Listing",
+      required: true,
     },
   },
   { timestamps: true }
 );
-
-export default mongoose.model("Conversation", conversationSchema);
+const Conversation = mongoose.models.Conversation || mongoose.model("Conversation", conversationSchema);
+export default Conversation;

@@ -80,11 +80,11 @@ export default function DashboardContent() {
   }, []);
 
   // Écouter messages en temps réel
-  useEffect(() => {
+ useEffect(() => {
   const user = JSON.parse(localStorage.getItem("user"));
   if (!user?._id) return;
 
-  socket.emit("join_user_room", user._id); // rejoindre sa room
+  socket.emit("join_user_room", user._id);
 
   socket.on("new_dashboard_message", (payload) => {
     if (payload?.message) {
@@ -139,20 +139,7 @@ export default function DashboardContent() {
         <StatCard icon={Heart} value={stats.favorites} label="Favoris" colorClass="text-red-500" />
       </div>
 
-      {/* Messages récents */}
-      <div className="mt-6 bg-white p-4 rounded-xl">
-        <div className="font-bold mb-3">Messages récents</div>
-        {messages.slice(0, 5).map((m) => (
-          <div key={m._id} className="border-b py-2">
-            <div className="font-semibold">{m.senderName}</div>
-            <div className="text-sm text-gray-500">{m.text}</div>
-            {m.listingTitle && <div className="text-xs text-gray-400">{m.listingTitle}</div>}
-          </div>
-        ))}
-        {messages.length === 0 && (
-          <div className="text-sm text-gray-400">Aucun message reçu pour le moment</div>
-        )}
-      </div>
+      
 
       {/* Activité récente */}
       <div className="mt-8 bg-white border border-slate-200 rounded-2xl shadow-sm">

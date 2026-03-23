@@ -8,7 +8,7 @@ import path from "path";
 import userRoutes from "./routes/user.js";
 import favoriteRoutes from "./routes/favorite.js";
 import messageRoutes from "./routes/message.js";
-
+import conversationRoutes from "./routes/conversation.js";
 
 
 
@@ -28,7 +28,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
-
+app.use("/api/conversations", conversationRoutes);
 
 app.use("/api/favorites", favoriteRoutes);
 
