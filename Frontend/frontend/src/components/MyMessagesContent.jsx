@@ -1,18 +1,20 @@
-import React, { useMemo, useState, useEffect, useRef } from "react"; // ✅ Ajout de useRef
+import React, { useMemo, useEffect, useState, useRef } from "react";
 import { Trash2, MessageSquare, Send, Car } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
+import { Calendar, Gauge, MapPin } from "lucide-react";
 
-const socket = io("http://localhost:5000");
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+const currentUser = {
+  id: storedUser._id || "temp_id",
+  fullName: storedUser.fullName || "Utilisateur"
+};
+
+// --- SOUS-COMPOSANTS ---
 function Avatar({ name }) {
-  const initials = (name || "?")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
-
+  const initials = (name || "?").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join("");
   return (
     <div className="h-10 w-10 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold grid place-items-center shrink-0">
       {initials || "??"}
@@ -20,427 +22,406 @@ function Avatar({ name }) {
   );
 }
 
-function NewBadge() {
-  return (
-    <span className="rounded-full bg-blue-600 text-white text-[11px] font-semibold px-3 py-1">
-      Nouveau
-    </span>
-  );
-}
-
 function ConversationRow({ conv, isActive, onOpen, onDelete }) {
-  const id = conv._id || conv.id;
-  
+  const id = conv.id || conv._id;
   return (
     <div
-      className={[
-        "w-full border rounded-xl p-3 flex items-center justify-between gap-3 transition-colors",
-        isActive
-          ? "bg-blue-50 border-blue-200"
-          : conv.isNew
-          ? "bg-blue-50/60 border-blue-100"
-          : "bg-white border-slate-200",
-      ].join(" ")}
+      onClick={() => onOpen(conv)}
+      className={`w-full border rounded-xl p-3 transition flex items-center justify-between gap-3 cursor-pointer ${isActive ? "bg-blue-50 border-blue-200" : "bg-white border-slate-200 hover:bg-slate-50"
+        }`}
     >
-      <div
-        className="flex items-start gap-3 flex-1 cursor-pointer"
-        onClick={() => onOpen(conv)}
-      >
+      <div className="flex items-start gap-3 min-w-0 flex-1">
         <Avatar name={conv.fromName} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="font-semibold truncate">{conv.fromName}</div>
-            {conv.isNew && <NewBadge />}
-          </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-slate-900 truncate">{conv.fromName}</div>
           <div className="text-sm text-slate-600 truncate">{conv.preview}</div>
         </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        <div className="text-xs text-slate-400">{conv.when}</div>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(id); }}>
-          <Trash2 size={18} className="text-red-500 hover:text-red-700" />
-        </button>
-      </div>
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(id); }}
+        className="p-2 hover:bg-red-50 rounded-lg group"
+      >
+        <Trash2 size={16} className="text-slate-300 group-hover:text-red-500 transition-colors" />
+      </button>
     </div>
   );
 }
 
 function ChatBubble({ mine, text, when }) {
   return (
-    <div className={mine ? "text-right" : "text-left"}>
-      <div
-        className={
-          mine
-            ? "inline-block bg-slate-900 text-white p-3 rounded-2xl rounded-tr-none max-w-[80%]"
-            : "inline-block bg-white border border-slate-200 p-3 rounded-2xl rounded-tl-none max-w-[80%]"
-        }
-      >
-        <div className="text-sm leading-relaxed text-left">{text}</div>
-        <div className={`text-[10px] mt-1 ${mine ? "text-slate-400" : "text-slate-500"}`}>
-          {when}
-        </div>
+    <div className={`w-full flex ${mine ? "justify-end" : "justify-start"} mb-2`}>
+      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 shadow-sm ${mine ? "bg-slate-900 text-white rounded-tr-none" : "bg-white border border-slate-200 rounded-tl-none text-slate-800"
+        }`}>
+        <div className="text-sm leading-relaxed">{text}</div>
+        <div className={`text-[10px] mt-1 ${mine ? "text-slate-400" : "text-slate-500"}`}>{when}</div>
       </div>
     </div>
   );
 }
 
+// --- COMPOSANT PRINCIPAL ---
 export default function MyMessagesContent() {
+    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+const currentUser = {
+  id: storedUser._id || "temp_id",
+  fullName: storedUser.fullName || "Utilisateur"
+};
+  const navigate = useNavigate();
   const location = useLocation();
-  const navState = location.state || {};
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const scrollRef = useRef(null);
+  const socketRef = useRef(null);
+
+
+  const { car, sellerName, sellerId } = location.state || {};
+
 
   const [conversations, setConversations] = useState([]);
-  const [activeId, setActiveId] = useState(null);
-  const [selectedCar, setSelectedCar] = useState(null);
+  const [activeId, setActiveId] = useState(car?._id || null);
   const [draft, setDraft] = useState("");
 
-  // 🟢 LOGIQUE SCROLL AUTOMATIQUE
-  const messagesEndRef = useRef(null);
+  const activeConv = useMemo(
+    () => conversations.find((c) => (c.id || c._id)?.toString() === activeId?.toString()),
+    [conversations, activeId]
+  );
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const currentCar =
+    typeof activeConv?.listingId === "object"
+      ? activeConv.listingId
+      : activeConv?.listing || null;
 
-  const activeConv = conversations.find((c) => (c._id || c.id) === activeId);
+      
 
   useEffect(() => {
-    scrollToBottom();
-  }, [activeConv?.messages]); 
-  // -----------------------------
+    const fetchConversations = async () => {
+      try {
+        // Remplace l'URL par ton point d'accès API réel
+        const response = await fetch(`http://localhost:5000/api/conversations/${currentUser.id}`);
+        const data = await response.json();
 
-  // 🔥 Charger TOUTES les conversations au démarrage
-// 🔥 CHARGER TOUTES LES CONVERSATIONS (LISTE DE GAUCHE)
-useEffect(() => {
-  if (!user?._id) return;
+        // On formate les données pour s'assurer que le nom affiché est celui de l'interlocuteur
+        const formattedConvs = data.map(conv => {
+          const otherMember = conv.members.find(m => m._id !== currentUser.id);
+          return {
+            ...conv,
+            fromName: otherMember?.fullName || "Utilisateur",
+            otherMemberId: otherMember?._id
+          };
+        });
 
-  const fetchMyConversations = async () => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/conversations/${user._id}`);
-      if (!res.ok) throw new Error("Erreur serveur");
-      const data = await res.json();
+        setConversations(formattedConvs);
 
-      // On formate les données pour l'affichage
-      const formatted = data.map((c) => {
-  const otherMember = c.members.find((m) => m._id !== user._id);
-  
-  return {
-    ...c,
-    id: c._id,
-    fromName: otherMember?.fullName || "Utilisateur",
-    preview: c.lastMessage || "Nouveau message...",
-    // On garde listingId intact pour que openConversation le trouve
-    listingId: c.listingId 
-  };
-});
-
-      setConversations(formatted);
-      if (formatted.length > 0 && !activeId) {
-  setActiveId(formatted[0].id);
-  if (formatted[0].listingId) {
-    setSelectedCar(formatted[0].listingId);
-  }
-}
-    } catch (err) {
-      console.error("❌ Erreur chargement conversations:", err);
-    }
-  };
-
-  fetchMyConversations();
-}, [user?._id]);
-
- useEffect(() => {
-  if (!activeId) return;
-
-  const loadMessages = async () => {
-    try {
-      // Nettoyage de l'ID (au cas où il y aurait un préfixe "conv_")
-      const cleanId = activeId.toString().replace("conv_", "");
-
-      const res = await fetch(`http://localhost:5000/api/messages/${cleanId}`);
-
-      if (!res.ok) {
-        console.error("❌ Erreur API:", res.status);
-        return;
+      } catch (error) {
+        console.error("Erreur lors du chargement des conversations:", error);
       }
+    };
 
+    if (currentUser.id) {
+      fetchConversations();
+    }
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeConv?.messages]);
+
+  // 1. Initialisation Socket
+  useEffect(() => {
+    const socket = io(SOCKET_URL);
+    socketRef.current = socket;
+
+    socket.emit("join_user_room", currentUser.id);
+
+    socket.on("receive_message", (msg) => {
+      // 🛑 ANTI-DOUBLON : Si l'envoyeur c'est moi, j'ignore (déjà ajouté par sendMessage)
+      const senderId = msg.sender?._id || msg.sender;
+      if (senderId?.toString() === currentUser.id.toString()) return;
+
+      setConversations((prev) => prev.map((c) => {
+        const cId = (c.id || c._id).toString().replace("conv_", "");
+        const msgConvId = msg.conversationId.toString().replace("conv_", "");
+        const senderId = msg.sender?._id || msg.sender;
+        const senderName = msg.sender?.fullName || "Utilisateur";
+        const isMe = senderId?.toString() === currentUser.id.toString();
+
+
+        if (cId !== msgConvId) return c;
+
+        return {
+          ...c,
+          fromName: isMe ? c.fromName : senderName,
+          preview: msg.text,
+          messages: [...(c.messages || []), {
+            id: msg._id || Date.now(),
+            text: msg.text,
+            mine: false, // Message reçu d'un tiers
+            when: new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          }]
+        };
+      }));
+    });
+
+    return () => socket.disconnect();
+  }, []);
+
+  // 2. Logique Buyer (Nouvelle discussion)
+  useEffect(() => {
+    if (car && sellerId) {
+      const convId = car._id;
+      setConversations(prev => {
+        const exists = prev.find(c => (c.id || c._id) === convId);
+
+        if (exists) return prev;
+
+        return [{
+          id: convId,
+          _id: convId,
+          fromName: sellerName,
+          otherMemberId: sellerId,
+          preview: "Démarrer la discussion...",
+          messages: [],
+          listingId: car._id,   // ✅ backend
+          listing: car,         // ✅ frontend
+          members: [currentUser.id, sellerId]
+        }, ...prev];
+      });
+      setActiveId(convId);
+      socketRef.current?.emit("join_conversation", convId);
+    }
+  }, [car, sellerId, sellerName]);
+
+  const openConversation = async (conv) => {
+    const id = conv.id || conv._id;
+
+    setActiveId(id);
+    socketRef.current?.emit("join_conversation", id);
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/messages/${id}`);
       const data = await res.json();
 
-      setConversations((prev) =>
-        prev.map((c) => {
-          if ((c._id || c.id).toString() === activeId.toString()) {
+      setConversations(prev =>
+        prev.map(c => {
+          if ((c.id || c._id).toString() === id.toString()) {
             return {
               ...c,
-              messages: data.map((m) => ({
-                ...m,
-                // On vérifie si l'ID du sender correspond à l'utilisateur connecté
-                mine: (m.sender?._id || m.sender) === user._id,
+              messages: data.map(m => ({
+                id: m._id,
+                text: m.text,
+                mine: (m.sender._id === currentUser.id),
                 when: new Date(m.createdAt).toLocaleTimeString([], {
                   hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              })),
+                  minute: "2-digit"
+                })
+              }))
             };
           }
           return c;
         })
       );
+
     } catch (err) {
-      console.error("❌ loadMessages error:", err);
+      console.error("Erreur chargement messages:", err);
     }
   };
 
-  loadMessages();
-}, [activeId]); // Se déclenche dès que vous changez de conversation
+  const deleteConversation = async (id) => {
+    try {
+      const raw = localStorage.getItem("user");
+      const user = JSON.parse(raw);
 
-  useEffect(() => {
-  if (navState?.car?.initialConversation) {
-    const conv = navState.car.initialConversation;
-    const id = conv._id || conv.id;
+      await fetch(`http://localhost:5000/api/conversations/full/${id}/${user._id}`, {
+        method: "DELETE",
+      });
 
-    setConversations((prev) => {
-      // On vérifie si elle existe déjà pour ne pas avoir de doublons
-      const exists = prev.find((c) => (c._id || c.id) === id);
-      if (exists) return prev;
-      
-      // On l'ajoute au début de la liste avec l'annonce (car) attachée
-      return [{ ...conv, listingId: navState.car }, ...prev];
-    });
+      // ✅ Update UI après succès
+      setConversations(prev =>
+        prev.filter(c => (c.id || c._id) !== id)
+      );
 
-    setActiveId(id);
-    setSelectedCar(navState.car); // 🔥 Affiche l'annonce tout de suite
-  }
-}, [navState]);
+      if (activeId === id) setActiveId(null);
 
-  useEffect(() => {
-    if (user?._id) socket.emit("join_user_room", user._id);
-    if (activeId) socket.emit("join_conversation", activeId.toString().replace("conv_", ""));
-  }, [activeId, user?._id]);
-
-useEffect(() => {
-  const handleMessage = (message) => {
-    setConversations((prev) =>
-      prev.map((c) => {
-        const convId = (c._id || c.id).toString().replace("conv_", "");
-        const incomingConvId = message.conversationId.toString().replace("conv_", "");
-
-        if (convId !== incomingConvId) return c;
-
-        // 🛡️ PROTECTION CONTRE LES DOUBLONS
-        // On vérifie si le message (par son ID) est déjà présent
-        const alreadyExists = c.messages?.some(
-          (m) => (m._id || m.id) === (message._id || message.id)
-        );
-        
-        // Si l'ID existe déjà, on ne change rien à cette conversation
-        if (alreadyExists) return c;
-
-        return {
-          ...c,
-          preview: message.text,
-          messages: [
-            ...(c.messages || []),
-            {
-              ...message,
-              mine: message.sender._id === user._id || message.sender === user._id,
-              when: new Date(message.createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            },
-          ],
-        };
-      })
-    );
+    } catch (error) {
+      console.error("Erreur suppression :", error);
+    }
   };
 
-  socket.on("receive_message", handleMessage);
-  return () => socket.off("receive_message", handleMessage);
-}, [user?._id]);
+  // ✅ ENVOI MESSAGE SANS DOUBLON
+  const sendMessage = () => {
+    if (!draft.trim() || !activeId || !socketRef.current) return;
 
+    const receiverId =
+      activeConv?.otherMemberId ||
+      activeConv?.members?.find(m => (m._id || m)?.toString() !== currentUser.id.toString()) ||
+      sellerId;
 
-function openConversation(conv) {
-  setActiveId(conv._id || conv.id);
-  
-  // 🔥 On vérifie toutes les sources possibles de l'annonce
-  const carData = conv.listingId || conv.car; 
-  
-  if (carData) {
-    setSelectedCar(carData);
-  } else {
-    // Si on n'a rien, on ne laisse pas l'ancien affichage
-    setSelectedCar(null); 
-  }
-}
+    if (!receiverId) return;
 
-  function deleteConversation(convId) {
-    setConversations((prev) => prev.filter((c) => (c._id || c.id) !== convId));
-    if (convId === activeId) setActiveId(null);
-  }
+    const messageData = {
+      conversationId: activeId.toString().replace("conv_", ""),
+      senderId: currentUser.id,
+      receiverId: receiverId,
+      text: draft,
+      listingId: car?._id || activeConv?.listingId?._id
+    };
 
-  async function sendMessage() {
-  if (!draft.trim() || !activeConv || !user?._id) return;
+    // 1. Envoyer au serveur
+    socketRef.current.emit("send_message", messageData);
 
-  const messageText = draft;
-  // On nettoie l'ID pour correspondre au format MongoDB
-  const cleanConvId = (activeConv._id || activeConv.id).toString().replace("conv_", "");
+    // 2. Ajouter localement (Optimistic UI) pour affichage immédiat à DROITE
+    setConversations(prev => prev.map(c => {
+      if ((c.id || c._id)?.toString() === activeId.toString()) {
+        return {
+          ...c,
+          preview: draft,
+          messages: [...(c.messages || []), {
+            id: Date.now(),
+            text: draft,
+            mine: true, // Toujours à droite pour moi
+            when: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]
+        };
+      }
+      return c;
+    }));
 
-  try {
-    // 1. APPEL À TON API (Enregistrement en BDD)
-    const response = await fetch("http://localhost:5000/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId: cleanConvId,
-        senderId: user._id,
-        text: messageText
-      }),
-    });
-
-    if (!response.ok) throw new Error("Erreur serveur lors de l'envoi");
-
-    const savedMessage = await response.json();
-
-    // 2. MISE À JOUR OPTIMISTE DE L'INTERFACE
-    // Note : Ton backend envoie déjà "receive_message" via Socket, 
-    // donc si ton useEffect Socket est bien réglé, le message apparaîtra tout seul.
-    // Sinon, tu peux forcer l'ajout ici :
-    setConversations((prev) =>
-      prev.map((c) => {
-        if ((c._id || c.id).toString() === (activeConv._id || activeConv.id).toString()) {
-          return {
-            ...c,
-            preview: messageText,
-            messages: [
-              ...(c.messages || []),
-              {
-                ...savedMessage,
-                mine: true,
-                when: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              },
-            ],
-          };
-        }
-        return c;
-      })
-    );
-
-    setDraft(""); // Vider le champ de texte
-  } catch (err) {
-    console.error("❌ Erreur envoi message:", err);
-    alert("Impossible d'envoyer le message.");
-  }
-}
+    setDraft("");
+  };
 
   return (
-    <div className="h-[calc(100vh-0px)] w-full bg-slate-50 flex flex-col">
+    <div className="h-[calc(100vh-0px)] w-full bg-slate-50 flex flex-col overflow-hidden">
+      {/* Header */}
       <div className="w-full bg-slate-900 shrink-0">
         <div className="px-6 py-5 flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-yellow-400 grid place-items-center">
             <MessageSquare className="h-5 w-5 text-slate-900" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-white">Mes Messages</h1>
+          <h1 className="text-2xl font-extrabold text-white">Mes Messages</h1>
         </div>
       </div>
 
-      <div className="flex-1 w-full px-6 py-6 overflow-hidden">
+      <div className="flex-1 overflow-hidden p-4 md:p-6">
         <div className="h-full grid grid-cols-12 gap-6">
-          <aside className="col-span-12 md:col-span-4 lg:col-span-3 h-full overflow-hidden flex flex-col">
+          {/* Liste Conversations */}
+          <aside className="col-span-12 md:col-span-4 lg:col-span-3 h-full flex flex-col min-h-0">
             <div className="h-full bg-white border border-slate-200 rounded-2xl p-4 flex flex-col">
-              <div className="flex items-center justify-between mb-3 shrink-0">
-                <div className="font-bold text-slate-900">Conversations</div>
-                <div className="text-xs text-slate-400">{conversations.length}</div>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {conversations.length === 0 ? (
-                  <div className="text-sm text-slate-500 py-10 text-center">Aucune conversation</div>
-                ) : (
-                  conversations.map((c) => (
-                    <ConversationRow
-                      key={c._id || c.id}
-                      conv={c}
-                      isActive={(c._id || c.id) === activeId}
-                      onOpen={openConversation}
-                      onDelete={deleteConversation}
-                    />
-                  ))
-                )}
+              <div className="font-bold text-slate-900 mb-4">Conversations ({conversations.length})</div>
+              <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+                {conversations.map((c) => (
+                  <ConversationRow
+                    key={c.id || c._id}
+                    conv={c}
+                    isActive={(c.id || c._id) === activeId}
+                    onOpen={openConversation}
+                    onDelete={deleteConversation}
+                  />
+                ))}
               </div>
             </div>
           </aside>
 
-          <main className="col-span-12 md:col-span-8 lg:col-span-6 h-full overflow-hidden flex flex-col">
+          {/* Chat Principal */}
+          <main className="col-span-12 md:col-span-8 lg:col-span-6 h-full flex flex-col min-h-0">
             <div className="h-full bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden shadow-sm">
-              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Avatar name={activeConv?.fromName || "—"} />
-                  <div className="min-w-0">
-                    <div className="font-bold text-slate-900 truncate">{activeConv?.fromName || "Sélectionnez un chat"}</div>
-                    <div className="text-xs text-green-500 font-medium">{activeConv ? "En ligne" : "—"}</div>
-                  </div>
-                </div>
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3 shrink-0 bg-white">
+                <Avatar name={activeConv?.fromName || "—"} />
+                <div className="font-bold text-slate-900">{activeConv?.fromName || "Sélectionnez un chat"}</div>
               </div>
 
-              {/* ZONE DE MESSAGES AVEC SCROLL */}
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 bg-slate-50/50">
-                {activeConv ? (
-                  <>
-                    {activeConv.messages?.map((m, idx) => (
-                      <ChatBubble key={m._id || m.id || idx} mine={m.mine} text={m.text} when={m.when || "maintenant"} />
-                    ))}
-                    {/* 🟢 CIBLE DU SCROLL */}
-                    <div ref={messagesEndRef} />
-                  </>
-                ) : (
-                  <div className="h-full grid place-items-center text-slate-400 text-sm italic">Sélectionne une conversation pour commencer</div>
-                )}
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 bg-slate-50/30">
+                {activeConv?.messages?.map((m, idx) => (
+                  <ChatBubble key={m.id || idx} mine={m.mine} text={m.text} when={m.when} />
+                ))}
+                <div ref={scrollRef} />
               </div>
 
-              <div className="p-4 border-t border-slate-200 bg-white shrink-0">
+              {/* Input */}
+              <div className="p-4 border-t border-slate-100 bg-white shrink-0">
                 <div className="flex items-center gap-3">
                   <input
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
-                    placeholder={activeConv ? "Écrire un message..." : "—"}
-                    disabled={!activeConv}
-                    className="flex-1 h-12 rounded-xl border border-slate-200 px-4 outline-none focus:ring-2 focus:ring-slate-900/10 transition-all"
                     onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                    placeholder="Votre message..."
+                    className="flex-1 h-11 rounded-xl border border-slate-200 px-4 outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                   <button
                     onClick={sendMessage}
-                    disabled={!activeConv || !draft.trim()}
-                    className="h-12 w-12 rounded-xl bg-slate-900 disabled:bg-slate-300 flex items-center justify-center transition-transform active:scale-95"
+                    disabled={!draft.trim() || !activeId}
+                    className="h-11 w-11 rounded-xl bg-slate-900 flex items-center justify-center disabled:bg-slate-300 transition-transform active:scale-90"
                   >
-                    <Send size={20} className="text-white" />
+                    <Send className="h-4 w-4 text-white" />
                   </button>
                 </div>
               </div>
             </div>
           </main>
 
-          <aside className="col-span-12 lg:col-span-3 h-full overflow-hidden flex flex-col">
-            {/* Détails de l'annonce inchangés */}
-            <div className="h-full bg-white border border-slate-200 rounded-2xl p-4 overflow-y-auto">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="h-9 w-9 rounded-xl bg-slate-900 grid place-items-center"><Car size={18} className="text-white" /></div>
-                <div>
-                  <div className="font-bold text-slate-900">Annonce</div>
-                  <div className="text-xs text-slate-500">Détails du véhicule</div>
-                </div>
-              </div>
-              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                {selectedCar?.photos?.[0] ? <img src={selectedCar.photos[0]} alt="car" className="w-full h-40 object-cover" /> : <div className="h-40 bg-slate-100 grid place-items-center text-slate-400 text-sm italic">Aucune photo</div>}
-                <div className="p-4 space-y-2">
-                  <div className="font-extrabold text-slate-900 truncate">{selectedCar?.title || "—"}</div>
-                  <div className="text-blue-600 font-bold text-lg">{selectedCar?.price || "—"} DT</div>
-                  <div className="pt-2 space-y-2 text-sm text-slate-600">
-                    <div>📅 {selectedCar?.year || "—"}</div>
-                    <div>🛣️ {selectedCar?.km || "—"} km</div>
-                    <div>📍 {selectedCar?.location || "—"}</div>
+          {/* Détails Annonce */}
+          <aside className="hidden lg:flex lg:col-span-3 h-full flex-col">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+
+              {currentCar && (
+                <div className="space-y-4 mt-2">
+
+                  {/* Image */}
+                  <div className="rounded-xl overflow-hidden">
+                    <img
+                      src={
+                        currentCar.photos?.[0]
+                          ? `http://localhost:5000/${currentCar.photos[0].replace(/^\/+/, "")}`
+                          : "/no-image.jpg"
+                      }
+                      className="h-44 w-full object-cover"
+                      alt={currentCar.title}
+                    />
                   </div>
-                  <button className="w-full h-11 mt-2 rounded-xl bg-amber-400 text-slate-900 font-bold hover:bg-amber-500 transition-colors">Voir l’annonce</button>
+
+                  {/* Infos */}
+                  <div className="space-y-2">
+
+                    <h3 className="font-semibold text-base text-slate-900">
+                      {currentCar.title}
+                    </h3>
+
+                    <p className="text-blue-600 text-2xl font-extrabold">
+                      {currentCar.price?.toLocaleString()} DT
+                    </p>
+
+                    <div className="space-y-2 text-sm text-slate-500">
+
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <span>{currentCar?.year || "—"}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Gauge className="w-4 h-4 text-slate-400" />
+                        <span>
+                          {(currentCar.km || currentCar.mileage || "—")}
+                          {(currentCar.km || currentCar.mileage) ? " km" : ""}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-slate-400" />
+                        <span>
+                          {currentCar.location || currentCar.city || "—"}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    <button
+                      onClick={() => navigate(`/annonce/${currentCar._id}`)}
+                      className="w-full mt-3 py-2.5 rounded-xl border border-slate-200"
+                    >
+                      Voir l'annonce
+                    </button>
+
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </aside>
         </div>

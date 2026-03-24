@@ -12,7 +12,7 @@ router.get("/:userId", async (req, res) => {
       members: { $in: [req.params.userId] },
     })
     .populate("members", "fullName") 
-    .populate("listingId", "title photos price")
+    .populate("listingId")
     .sort({ updatedAt: -1 });
 
     res.status(200).json(conversations);
@@ -21,17 +21,30 @@ router.get("/:userId", async (req, res) => {
   }
 });
 // 🗑️ SUPPRIMER UNE CONVERSATION
-router.delete("/:id", async (req, res) => {
+// 🗑️ SUPPRIMER UNE CONVERSATION ENTIÈRE
+router.delete("/full/:id/:userId", async (req, res) => {
   try {
-    await Conversation.findByIdAndDelete(req.params.id);
-    // Optionnel : Supprimer aussi tous les messages liés à cette conversation
-    // await Message.deleteMany({ conversationId: req.params.id });
-    
-    res.status(200).json("Conversation supprimée avec succès.");
+    const { id, userId } = req.params;
+
+    // 1. Trouver la conversation
+    const conversation = await Conversation.findById(id);
+    if (!conversation) return res.status(404).json({ error: "Introuvable" });
+
+    // 2. Sécurité : Vérifier si l'utilisateur est membre
+    const isMember = conversation.members.some(m => m.toString() === userId);
+    if (!isMember) return res.status(403).json({ error: "Accès interdit" });
+
+    // 3. Supprimer la conversation ET ses messages
+    await Conversation.findByIdAndDelete(id);
+    await Message.deleteMany({ conversationId: id });
+
+    res.status(200).json({ success: true, message: "Supprimée avec succès" });
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ error: "Erreur serveur" });
   }
 });
+
+
 
 
 
