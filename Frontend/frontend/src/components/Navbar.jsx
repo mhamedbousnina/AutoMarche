@@ -13,7 +13,9 @@ import {
   Car,
   LogOut,
   LayoutDashboard,
+  Bell,
 } from "lucide-react";
+
 import { getMe } from "../apis/user"; // ✅
 
 const CATS = [
@@ -98,7 +100,7 @@ export default function Navbar({ onOpenLogin, user }) {
           setNavUser(freshUser);
           window.dispatchEvent(new Event("userUpdated"));
         }
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -222,6 +224,21 @@ export default function Navbar({ onOpenLogin, user }) {
                 Publier
               </button>
 
+              {/* 🔥 NOUVELLE ICÔNE DE NOTIFICATION */}
+              {navUser && (
+                <button
+                  onClick={() => navigate("/dashboard/messages")} // Redirige vers les messages
+                  className="relative h-12 w-12 flex items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+                >
+                  <Bell className="h-6 w-6" />
+
+                  {/* Badge rouge (Le petit rond avec le nombre) */}
+                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center">
+                    3
+                  </span>
+                </button>
+              )}
+
               {/* User dropdown */}
               <div className="relative" ref={menuRef}>
                 <button
@@ -285,6 +302,8 @@ export default function Navbar({ onOpenLogin, user }) {
               </div>
             </div>
           </div>
+
+
 
           <nav className="h-12 flex items-center gap-7 text-sm font-semibold text-slate-700">
             <a href="#" className="flex items-center gap-1 hover:text-blue-600">

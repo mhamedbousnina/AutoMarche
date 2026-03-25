@@ -126,42 +126,73 @@ const currentUser = {
 
   // 1. Initialisation Socket
   useEffect(() => {
-    const socket = io(SOCKET_URL);
-    socketRef.current = socket;
+  const socket = io(SOCKET_URL);
+  socketRef.current = socket;
 
-    socket.emit("join_user_room", currentUser.id);
+  // rejoindre room user
+  socket.emit("join_user_room", currentUser.id);
 
-    socket.on("receive_message", (msg) => {
-      // 🛑 ANTI-DOUBLON : Si l'envoyeur c'est moi, j'ignore (déjà ajouté par sendMessage)
-      const senderId = msg.sender?._id || msg.sender;
-      if (senderId?.toString() === currentUser.id.toString()) return;
+ socket.on("receive_message", (msg) => {
+  // 1. On identifie l'ID de l'envoyeur
+  const senderId = (msg.sender?._id || msg.sender).toString();
+  const isMe = senderId === currentUser.id.toString();
 
-      setConversations((prev) => prev.map((c) => {
-        const cId = (c.id || c._id).toString().replace("conv_", "");
-        const msgConvId = msg.conversationId.toString().replace("conv_", "");
-        const senderId = msg.sender?._id || msg.sender;
-        const senderName = msg.sender?.fullName || "Utilisateur";
-        const isMe = senderId?.toString() === currentUser.id.toString();
+  setConversations((prev) => {
+    const msgConvId = msg.conversationId.toString();
+    const exists = prev.find((c) => (c.id || c._id).toString() === msgConvId);
 
-
-        if (cId !== msgConvId) return c;
-
+    if (exists) {
+      // ✅ Si la conversation existe déjà, on met juste à jour le texte et l'ordre
+      return prev.map((c) => {
+        if ((c.id || c._id).toString() !== msgConvId) return c;
         return {
           ...c,
-          fromName: isMe ? c.fromName : senderName,
           preview: msg.text,
-          messages: [...(c.messages || []), {
-            id: msg._id || Date.now(),
-            text: msg.text,
-            mine: false, // Message reçu d'un tiers
-            when: new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          }]
+          messages: [
+            ...(c.messages || []),
+            {
+              id: msg._id,
+              text: msg.text,
+              mine: isMe,
+              when: new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            },
+          ],
         };
-      }));
-    });
+      });
+    }
 
-    return () => socket.disconnect();
-  }, []);
+    // ✅ NOUVELLE CONVERSATION (Le cas qui pose problème)
+    const newConv = {
+      id: msgConvId,
+      _id: msgConvId,
+      
+      // 🔥 LA CORRECTION EST ICI : 
+      // Si je suis l'envoyeur (isMe), le nom affiché doit être le receveur.
+      // Si je suis le receveur (!isMe), le nom affiché doit être l'envoyeur (msg.sender).
+      fromName: isMe 
+        ? (msg.receiver?.fullName || "Destinataire") 
+        : (msg.sender?.fullName || "Nouvel expéditeur"),
+
+      otherMemberId: isMe ? (msg.receiver?._id || msg.receiver) : senderId,
+      preview: msg.text,
+      listing: msg.listingId, 
+      listingId: msg.listingId, 
+      messages: [
+        {
+          id: msg._id,
+          text: msg.text,
+          mine: isMe,
+          when: new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ],
+    };
+
+    return [newConv, ...prev];
+  });
+});
+
+  return () => socket.disconnect();
+}, []);
 
   // 2. Logique Buyer (Nouvelle discussion)
   useEffect(() => {
@@ -268,22 +299,7 @@ const currentUser = {
     socketRef.current.emit("send_message", messageData);
 
     // 2. Ajouter localement (Optimistic UI) pour affichage immédiat à DROITE
-    setConversations(prev => prev.map(c => {
-      if ((c.id || c._id)?.toString() === activeId.toString()) {
-        return {
-          ...c,
-          preview: draft,
-          messages: [...(c.messages || []), {
-            id: Date.now(),
-            text: draft,
-            mine: true, // Toujours à droite pour moi
-            when: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]
-        };
-      }
-      return c;
-    }));
-
+    
     setDraft("");
   };
 
