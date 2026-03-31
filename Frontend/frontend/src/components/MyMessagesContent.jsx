@@ -6,6 +6,13 @@ import { Calendar, Gauge, MapPin } from "lucide-react";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
+const getConversationId = (listingId, userA, userB) => {
+  if (!listingId || !userA || !userB) return null;
+  return [listingId.toString(), userA.toString(), userB.toString()]
+    .sort()
+    .join("_");
+};
+
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
 const currentUser = {
   id: storedUser._id || "temp_id",
@@ -24,24 +31,56 @@ function Avatar({ name }) {
 
 function ConversationRow({ conv, isActive, onOpen, onDelete }) {
   const id = conv.id || conv._id;
+
+  // On active le style bleu si la conversation est sélectionnée (isActive) 
+  // OU si elle contient un nouveau message (isNew / highlighted)
+  const isBlue = isActive || conv.isNew || conv.highlighted;
+
+  const containerClass = isBlue
+    ? "border-blue-500 bg-blue-50 shadow-sm"
+    : "border-slate-200 bg-white hover:bg-slate-50";
+
   return (
     <div
       onClick={() => onOpen(conv)}
-      className={`w-full border rounded-xl p-3 transition flex items-center justify-between gap-3 cursor-pointer ${isActive ? "bg-blue-50 border-blue-200" : "bg-white border-slate-200 hover:bg-slate-50"
-        }`}
+      className={`w-full border-2 rounded-xl p-3 transition-all duration-300 flex items-center justify-between gap-3 cursor-pointer ${containerClass}`}
     >
       <div className="flex items-start gap-3 min-w-0 flex-1">
-        <Avatar name={conv.fromName} />
+        {/* Avatar préservé du 1er code */}
+        <div className="relative">
+          <Avatar name={conv.fromName} />
+        </div>
+        
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-slate-900 truncate">{conv.fromName}</div>
-          <div className="text-sm text-slate-600 truncate">{conv.preview}</div>
+          <div className="flex items-center gap-2">
+            <span className={`font-bold truncate ${isBlue ? "text-slate-900" : "text-slate-700"}`}>
+              {conv.fromName}
+            </span>
+            
+            {/* Badge Nouveau : s'affiche indépendamment sur chaque ligne si isNew est vrai */}
+            {conv.isNew && !isActive && (
+              <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                Nouveau
+              </span>
+            )}
+          </div>
+
+          {/* Preview du message : passe en bleu et gras si nouveau message */}
+          <p className={`text-sm truncate ${conv.isNew || conv.highlighted ? "text-blue-700 font-semibold" : "text-slate-500"}`}>
+            {conv.preview}
+          </p>
         </div>
       </div>
+
+      {/* Bouton de suppression préservé */}
       <button
-        onClick={(e) => { e.stopPropagation(); onDelete(id); }}
-        className="p-2 hover:bg-red-50 rounded-lg group"
+        onClick={(e) => {
+          e.stopPropagation(); // Empêche l'ouverture de la conversation lors du clic sur supprimer
+          onDelete(id);
+        }}
+        className="p-2 hover:bg-red-100 rounded-lg group transition-colors"
       >
-        <Trash2 size={16} className="text-slate-300 group-hover:text-red-500 transition-colors" />
+        <Trash2 size={16} className="text-slate-400 group-hover:text-red-500" />
       </button>
     </div>
   );
@@ -104,7 +143,9 @@ const currentUser = {
           return {
             ...conv,
             fromName: otherMember?.fullName || "Utilisateur",
-            otherMemberId: otherMember?._id
+            otherMemberId: otherMember?._id,
+            isNew: conv.unreadBy.includes(currentUser.id), 
+      highlighted: conv.unreadBy.includes(currentUser.id)
           };
         });
 
@@ -133,61 +174,53 @@ const currentUser = {
   socket.emit("join_user_room", currentUser.id);
 
  socket.on("receive_message", (msg) => {
-  // 1. On identifie l'ID de l'envoyeur
-  const senderId = (msg.sender?._id || msg.sender).toString();
-  const isMe = senderId === currentUser.id.toString();
+  const msgConvId = msg.conversationId.toString();
+  const isMe = (msg.sender?._id || msg.sender).toString() === currentUser.id.toString();
 
   setConversations((prev) => {
-    const msgConvId = msg.conversationId.toString();
-    const exists = prev.find((c) => (c.id || c._id).toString() === msgConvId);
+    // 1. Trouver l'index de la conversation
+    const existingIndex = prev.findIndex((c) => (c.id || c._id).toString() === msgConvId);
 
-    if (exists) {
-      // ✅ Si la conversation existe déjà, on met juste à jour le texte et l'ordre
-      return prev.map((c) => {
-        if ((c.id || c._id).toString() !== msgConvId) return c;
-        return {
-          ...c,
-          preview: msg.text,
-          messages: [
-            ...(c.messages || []),
-            {
-              id: msg._id,
-              text: msg.text,
-              mine: isMe,
-              when: new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            },
-          ],
-        };
-      });
-    }
+    let updatedConv;
 
-    // ✅ NOUVELLE CONVERSATION (Le cas qui pose problème)
-    const newConv = {
-      id: msgConvId,
-      _id: msgConvId,
-      
-      // 🔥 LA CORRECTION EST ICI : 
-      // Si je suis l'envoyeur (isMe), le nom affiché doit être le receveur.
-      // Si je suis le receveur (!isMe), le nom affiché doit être l'envoyeur (msg.sender).
-      fromName: isMe 
-        ? (msg.receiver?.fullName || "Destinataire") 
-        : (msg.sender?.fullName || "Nouvel expéditeur"),
-
-      otherMemberId: isMe ? (msg.receiver?._id || msg.receiver) : senderId,
-      preview: msg.text,
-      listing: msg.listingId, 
-      listingId: msg.listingId, 
-      messages: [
-        {
+    if (existingIndex !== -1) {
+      // ✅ ELLE EXISTE : On crée une version mise à jour
+      const oldConv = prev[existingIndex];
+      updatedConv = {
+        ...oldConv,
+        preview: msg.text,
+        highlighted: !isMe, // Cadre bleu
+        isNew: !isMe,       // Badge "Nouveau"
+        messages: [...(oldConv.messages || []), {
           id: msg._id,
           text: msg.text,
           mine: isMe,
           when: new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ],
-    };
+        }],
+      };
 
-    return [newConv, ...prev];
+      // 🔥 ACTION CRUCIALE : On enlève l'ancienne et on met la nouvelle à l'index 0 (en haut)
+      const otherConvs = prev.filter((_, idx) => idx !== existingIndex);
+      return [updatedConv, ...otherConvs];
+
+    } else {
+      // ✅ NOUVELLE CONVERSATION : On l'ajoute au sommet
+      const newConv = {
+        id: msgConvId,
+        _id: msgConvId,
+        fromName: isMe ? (msg.receiver?.fullName || "Destinataire") : (msg.sender?.fullName || "Nouveau"),
+        preview: msg.text,
+        highlighted: !isMe,
+        isNew: !isMe,
+        messages: [{
+          id: msg._id,
+          text: msg.text,
+          mine: isMe,
+          when: new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        }],
+      };
+      return [newConv, ...prev];
+    }
   });
 });
 
@@ -197,7 +230,7 @@ const currentUser = {
   // 2. Logique Buyer (Nouvelle discussion)
   useEffect(() => {
     if (car && sellerId) {
-      const convId = car._id;
+      const convId = getConversationId(car._id, currentUser.id, sellerId);
       setConversations(prev => {
         const exists = prev.find(c => (c.id || c._id) === convId);
 
@@ -224,7 +257,18 @@ const currentUser = {
     const id = conv.id || conv._id;
 
     setActiveId(id);
+    setConversations(prev => prev.map(c => 
+    (c.id || c._id) === id ? { ...c, highlighted: false, isNew: false } : c
+  ));
     socketRef.current?.emit("join_conversation", id);
+
+  try {
+    await fetch(`http://localhost:5000/api/conversations/read/${id}/${currentUser.id}`, {
+      method: "PATCH"
+    });
+  } catch (err) {
+    console.error("Erreur mark as read:", err);
+  }
 
     try {
       const res = await fetch(`http://localhost:5000/api/messages/${id}`);
@@ -235,6 +279,7 @@ const currentUser = {
           if ((c.id || c._id).toString() === id.toString()) {
             return {
               ...c,
+              highlighted: false,
               messages: data.map(m => ({
                 id: m._id,
                 text: m.text,
@@ -287,12 +332,18 @@ const currentUser = {
 
     if (!receiverId) return;
 
+    const listingId = car?._id || activeConv?.listingId?._id || activeConv?.listingId;
+    if (!listingId) return;
+
+    const conversationId = activeConv?.id || activeConv?._id || getConversationId(listingId, currentUser.id, receiverId);
+    if (!conversationId) return;
+
     const messageData = {
-      conversationId: activeId.toString().replace("conv_", ""),
+      conversationId,
       senderId: currentUser.id,
-      receiverId: receiverId,
+      receiverId,
       text: draft,
-      listingId: car?._id || activeConv?.listingId?._id
+      listingId,
     };
 
     // 1. Envoyer au serveur
@@ -327,6 +378,7 @@ const currentUser = {
                     key={c.id || c._id}
                     conv={c}
                     isActive={(c.id || c._id) === activeId}
+                    isHighlighted={c.highlighted}
                     onOpen={openConversation}
                     onDelete={deleteConversation}
                   />

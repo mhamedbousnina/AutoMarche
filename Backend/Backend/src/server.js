@@ -10,6 +10,14 @@ const PORT = process.env.PORT || 5000;
 
 await connectDB();
 
+// Ensure the current Conversation indexes match the schema (drop stale legacy indexes)
+try {
+  await Conversation.syncIndexes();
+  console.log("✅ Conversation indexes synced");
+} catch (syncErr) {
+  console.warn("⚠️ Conversation index sync failed:", syncErr);
+}
+
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
@@ -26,10 +34,33 @@ io.on("connection", (socket) => {
   console.log("🟢 Connecté:", socket.id);
 
   // ✅ ROOM USER
-  socket.on("join_user_room", (userId) => {
+  socket.on("join_user_room", async (userId) => {
     if (userId) {
       socket.join(userId.toString());
       console.log("👤 User room:", userId);
+
+      try {
+        const pendingNotifications = await Message.find({
+          receiver: userId,
+          read: false,
+        })
+          .populate("sender", "fullName")
+          .populate("listingId", "title")
+          .sort({ createdAt: -1 });
+
+        const formatted = pendingNotifications.map((message) => ({
+          _id: message._id,
+          fromName: message.sender?.fullName || "Utilisateur",
+          text: message.text,
+          listingTitle: message.listingId?.title || "",
+          conversationId: message.conversationId,
+          createdAt: message.createdAt,
+        }));
+
+        socket.emit("pending_notifications", formatted);
+      } catch (err) {
+        console.error("❌ Erreur pending_notifications:", err);
+      }
     }
   });
 
@@ -48,28 +79,47 @@ io.on("connection", (socket) => {
       const { conversationId, senderId, receiverId, text, listingId } = data;
 
       if (!senderId || !text) return;
+      if (!receiverId || !listingId) {
+        console.error("❌ senderId, receiverId ou listingId manquant");
+        return;
+      }
 
-      const cleanId = conversationId.toString().replace("conv_", "");
+      const sortedMembers = [senderId.toString(), receiverId.toString()].sort();
+      const canonicalConversationId = `${sortedMembers[0]}_${sortedMembers[1]}_${listingId}`;
+      const requestedId = conversationId ? conversationId.toString().replace("conv_", "") : null;
+      const cleanId = requestedId || canonicalConversationId;
 
       let conversation = await Conversation.findById(cleanId);
+      if (!conversation) {
+        conversation = await Conversation.findOne({
+          listingId,
+          members: { $all: sortedMembers },
+        });
+      }
 
       // 🆕 création conversation
       if (!conversation) {
-        if (!receiverId) {
-          console.error("❌ receiverId manquant");
-          return;
+        try {
+          conversation = await Conversation.create({
+            _id: canonicalConversationId,
+            members: sortedMembers,
+            listingId,
+          });
+          console.log("✅ Nouvelle conversation créée");
+
+          // 🔥 rejoindre room immédiatement
+          socket.join(canonicalConversationId);
+        } catch (createErr) {
+          if (createErr.code === 11000) {
+            conversation = await Conversation.findOne({
+              listingId,
+              members: { $all: sortedMembers },
+            });
+            if (!conversation) throw createErr;
+          } else {
+            throw createErr;
+          }
         }
-
-        conversation = await Conversation.create({
-          _id: cleanId,
-          members: [senderId, receiverId],
-          listingId: listingId || cleanId,
-        });
-
-        console.log("✅ Nouvelle conversation créée");
-
-        // 🔥 rejoindre room immédiatement
-        socket.join(cleanId);
       }
 
       const finalReceiverId = conversation.members.find(
@@ -84,14 +134,26 @@ io.on("connection", (socket) => {
         listingId: conversation.listingId,
       });
 
+      await Conversation.findByIdAndUpdate(conversation._id, {
+        lastMessage: savedMessage._id,
+        $addToSet: { unreadBy: finalReceiverId } // Ajoute le destinataire aux "non-lus"
+      });
+
       const populated = await savedMessage.populate([
         { path: "sender", select: "fullName" },
         { path: "receiver", select: "fullName" },
         { path: "listingId" }
       ]);
 
+      
+
       // ✅ envoyer dans room conversation
-      io.to(conversation._id.toString()).emit("receive_message", populated);
+       io.to(conversation._id.toString()).emit("receive_message", populated);
+      // ✅ notification temps réel pour le destinataire
+      if (finalReceiverId) {
+        io.to(finalReceiverId.toString()).emit("receive_message", populated);
+      }
+      io.to(senderId.toString()).emit("message_sent", populated);
 
       
 

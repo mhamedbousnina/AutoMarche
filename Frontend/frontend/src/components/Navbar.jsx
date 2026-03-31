@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import {
   CircleHelp,
   Globe,
@@ -15,6 +16,8 @@ import {
   LayoutDashboard,
   Bell,
 } from "lucide-react";
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 import { getMe } from "../apis/user"; // ✅
 
@@ -49,13 +52,43 @@ function readUserLS() {
   }
 }
 
-export default function Navbar({ onOpenLogin, user }) {
+export default function Navbar({ onOpenLogin, onOpenFilters, onResetFilters, user }) {
   const navigate = useNavigate();
 
   const [navUser, setNavUser] = useState(() => readUserLS() || user || null);
+  const currentUserId = navUser?._id || navUser?.id;
 
   const [openMenu, setOpenMenu] = useState(false);
+  const [openNotif, setOpenNotif] = useState(false);
+  const [messageNotifications, setMessageNotifications] = useState([]);
   const menuRef = useRef(null);
+  const socketRef = useRef(null);
+
+useEffect(() => {
+  const fetchUnread = async () => {
+    if (!currentUserId) return;
+
+    try {
+      const res = await getUnreadMessages(currentUserId);
+
+      const notifs = res.map((conv) => ({
+        senderName: conv.lastMessage?.sender?.fullName || "Message",
+        text: conv.lastMessage?.text || "Nouveau message",
+        time: new Date(conv.lastMessage?.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        conversationId: conv._id,
+      }));
+
+      setMessageNotifications(notifs);
+    } catch (err) {
+      console.error("Erreur unread:", err);
+    }
+  };
+
+  fetchUnread();
+}, [currentUserId]);
 
   // ✅ ferme menu quand click dehors
   useEffect(() => {
@@ -82,6 +115,39 @@ export default function Navbar({ onOpenLogin, user }) {
     window.addEventListener("userUpdated", sync);
     return () => window.removeEventListener("userUpdated", sync);
   }, []);
+
+  useEffect(() => {
+    const socket = io(SOCKET_URL);
+    socketRef.current = socket;
+
+    const handleReceive = (msg) => {
+      const senderName = msg.sender?.fullName || msg.sender || "Nouveau message";
+      const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setMessageNotifications((prev) => [
+        {
+          senderName,
+          text: "Vous avez reçu un message",
+          time,
+          conversationId: msg.conversationId?.toString(),
+        },
+        ...prev,
+      ].slice(0, 4));
+    };
+
+    socket.on("receive_message", handleReceive);
+
+    return () => {
+      socket.off("receive_message", handleReceive);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !currentUserId) return;
+    socket.emit("join_user_room", currentUserId);
+  }, [currentUserId]);
 
   // ✅ AU RECONNECT: si token موجود و user LS فارغ -> getMe()
   useEffect(() => {
@@ -177,7 +243,10 @@ export default function Navbar({ onOpenLogin, user }) {
 
               <div className="leading-tight">
                 <div
-                  onClick={() => navigate("/")}
+                  onClick={() => {
+                    onResetFilters?.();
+                    navigate("/");
+                  }}
                   className="text-2xl font-extrabold text-slate-900 cursor-pointer hover:text-blue-600 transition"
                 >
                   AutoMarché
@@ -203,7 +272,11 @@ export default function Navbar({ onOpenLogin, user }) {
 
                   <div className="h-7 w-px bg-slate-300" />
 
-                  <button className="px-6 h-full text-blue-600 font-semibold hover:bg-slate-200/60">
+                  <button
+                    type="button"
+                    onClick={() => onOpenFilters?.()}
+                    className="px-6 h-full text-blue-600 font-semibold hover:bg-slate-200/60"
+                  >
                     Filtres
                   </button>
                 </div>
@@ -226,17 +299,58 @@ export default function Navbar({ onOpenLogin, user }) {
 
               {/* 🔥 NOUVELLE ICÔNE DE NOTIFICATION */}
               {navUser && (
-                <button
-                  onClick={() => navigate("/dashboard/messages")} // Redirige vers les messages
-                  className="relative h-12 w-12 flex items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
-                >
-                  <Bell className="h-6 w-6" />
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenNotif((v) => !v)}
+                    className="relative h-12 w-12 flex items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    <Bell className="h-6 w-6" />
+                    {messageNotifications.length > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-5 px-1 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center">
+                        {messageNotifications.length}
+                      </span>
+                    )}
+                  </button>
 
-                  {/* Badge rouge (Le petit rond avec le nombre) */}
-                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center">
-                    3
-                  </span>
-                </button>
+                  {openNotif && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-lg overflow-hidden z-50">
+                      <div className="px-4 py-3 border-b border-slate-200">
+                        <div className="text-sm font-semibold text-slate-900">Notifications</div>
+                      </div>
+                      {messageNotifications.length === 0 ? (
+                        <div className="p-4 text-sm text-slate-500">Aucune notification de message</div>
+                      ) : (
+                        <div className="divide-y divide-slate-200">
+                          {messageNotifications.map((notif, index) => (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                setMessageNotifications([]);
+                                setOpenNotif(false);
+                                navigate("/dashboard", {
+                                  state: {
+                                    tab: "messages",
+                                  },
+                                });
+                              }}
+                              className="w-full text-left px-4 py-3 hover:bg-slate-50"
+                            >
+                              <div className="text-sm font-semibold text-slate-900">
+                                {notif.senderName}
+                              </div>
+                              <div className="text-sm text-slate-600 mt-1 truncate">
+                                {notif.text}
+                              </div>
+                              <div className="text-xs text-slate-400 mt-1">
+                                {notif.time}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* User dropdown */}

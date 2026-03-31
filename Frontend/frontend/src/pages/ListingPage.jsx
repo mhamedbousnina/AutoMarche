@@ -10,11 +10,7 @@ import {
 } from "lucide-react";
 import { createListing } from "../apis/listings";
 import { useNavigate } from "react-router-dom";
-
-const TUNISIA_GOVS = [
-    "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul", "Zaghouan", "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana",
-    "Sousse", "Monastir", "Mahdia", "Kairouan", "Kasserine", "Sidi Bouzid", "Sfax", "Gafsa", "Tozeur", "Kébili", "Gabès", "Médenine", "Tataouine",
-];
+import { TUNISIA_GOVS, TUNISIA_CITIES } from "../data/tunisia";
 
 const CAR_BRANDS = [
     "Abarth", "Acura", "Aixam", "Alfa Romeo", "Aston Martin", "Audi", "Bentley", "BMW", "Bugatti", "Buick", "BYD", "Cadillac",
@@ -79,6 +75,11 @@ export default function ListingPage() {
     const govOptions = useMemo(
         () => [...TUNISIA_GOVS].sort((a, b) => a.localeCompare(b, "fr")),
         []
+    );
+
+    const cityOptions = useMemo(
+        () => (form.gov ? (TUNISIA_CITIES[form.gov] || []) : []),
+        [form.gov]
     );
 
     function updateField(key, value) {
@@ -665,7 +666,10 @@ export default function ListingPage() {
                                             <label className="text-sm font-semibold text-slate-700">Gouvernorat *</label>
                                             <select
                                                 value={form.gov}
-                                                onChange={(e) => setField("gov", e.target.value)}
+                                                onChange={(e) => {
+                                                    setField("gov", e.target.value);
+                                                    setField("city", "");
+                                                }}
                                                 className={fieldClass("gov")}
                                             >
                                                 <option value="">Gouvernorat</option>
@@ -680,12 +684,17 @@ export default function ListingPage() {
 
                                         <div>
                                             <label className="text-sm font-semibold text-slate-700">Ville / Délégation</label>
-                                            <input
+                                            <select
                                                 value={form.city}
                                                 onChange={(e) => updateField("city", e.target.value)}
-                                                placeholder="Ex: La Marsa, Sousse ville..."
-                                                className="mt-1 w-full h-11 rounded-xl bg-slate-100 border border-slate-200 px-4 outline-none focus:ring-2 focus:ring-yellow-400"
-                                            />
+                                                disabled={!form.gov}
+                                                className={fieldClass("city")}
+                                            >
+                                                <option value="">{form.gov ? "Sélectionnez une ville / délégation" : "Choisissez d'abord un gouvernorat"}</option>
+                                                {cityOptions.map((city) => (
+                                                    <option key={city} value={city}>{city}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
                                 </div>

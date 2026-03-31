@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Navbar from "./components/Navbar";
 import AuthModal from "./components/AuthModal";
+import FilterModal from "./components/FilterModal";
 
 import HomePage from "./pages/HomePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -12,10 +13,23 @@ import AnnonceDetail from "./pages/AnnonceDetail";
 import EditListingPage from "./pages/EditListingPage";
 import MyMessagesContent from "./components/MyMessagesContent";
 
+const EMPTY_FILTERS = {
+  brand: "",
+  minPrice: "",
+  maxPrice: "",
+  year: "",
+  fuel: "",
+  gearbox: "",
+  gov: "",
+  city: "",
+};
+
 export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [user, setUser] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   useEffect(() => {
     async function loadMe() {
@@ -55,10 +69,22 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Navbar onOpenLogin={openLogin} user={user} />
+      <Navbar
+        onOpenLogin={openLogin}
+        onOpenFilters={() => setFiltersOpen(true)}
+        onResetFilters={() => setFilters(EMPTY_FILTERS)}
+        user={user}
+      />
+      <FilterModal
+        open={filtersOpen}
+        values={filters}
+        onApply={(values) => setFilters(values)}
+        onClose={() => setFiltersOpen(false)}
+        onReset={() => setFilters(EMPTY_FILTERS)}
+      />
 
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<HomePage filters={filters} />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/publier" element={<ListingPage user={user} />} />
         <Route path="/dashboard" element={<DashboardPage />} />

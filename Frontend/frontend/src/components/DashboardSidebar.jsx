@@ -7,7 +7,6 @@ import {
   User,
   HelpCircle,
   Settings,
-  LogOut,
   Plus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -15,8 +14,8 @@ import { useNavigate } from "react-router-dom";
 export default function DashboardSidebar({
   user, // ✅ AJOUT: infos depuis DB
   active = "dashboard",
-  counts = { ads: 3, messages: 5 },
-  onLogout,
+ 
+
   onSelect,
 }) {
   const navigate = useNavigate();
@@ -95,14 +94,14 @@ export default function DashboardSidebar({
               icon={Megaphone}
               label="Mes annonces"
               active={active === "ads"}
-              badge={counts?.ads}
+              
               onClick={() => onSelect?.("ads")}
             />
             <Item
               icon={MessageSquare}
               label="Mes messages"
               active={active === "messages"}
-              badge={counts?.messages}
+              
               onClick={() => onSelect?.("messages")}
             />
             <Item
@@ -138,17 +137,6 @@ export default function DashboardSidebar({
             />
           </div>
         </div>
-      </div>
-
-      {/* Bottom fixed */}
-      <div className="border-t border-slate-200">
-        <button
-          onClick={onLogout}
-          className="w-full px-5 py-4 flex items-center gap-3 text-red-500 hover:bg-red-50 transition"
-        >
-          <LogOut className="h-5 w-5" />
-          <span className="font-semibold">Déconnexion</span>
-        </button>
       </div>
     </aside>
   );

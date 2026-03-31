@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Heart, Calendar, Fuel, MapPin } from "lucide-react";
 import { getPublicListings, toBackendImage } from "../apis/listings";
 import { useNavigate } from "react-router-dom";
@@ -12,10 +12,36 @@ function Info({ icon: Icon, children }) {
   );
 }
 
-export default function CardListing() {
+export default function CardListing({ filters = {} }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  const filteredListings = useMemo(() => {
+    const brandFilter = String(filters.brand || "").trim().toLowerCase();
+    const fuelFilter = String(filters.fuel || "").trim().toLowerCase();
+    const gearboxFilter = String(filters.gearbox || "").trim().toLowerCase();
+    const yearFilter = String(filters.year || "").trim();
+    const govFilter = String(filters.gov || "").trim();
+    const cityFilter = String(filters.city || "").trim();
+    const minPrice = filters.minPrice ? Number(filters.minPrice) : null;
+    const maxPrice = filters.maxPrice ? Number(filters.maxPrice) : null;
+
+    return listings.filter((car) => {
+      const title = String(car.title || car.brand || "").toLowerCase();
+      const price = Number(car.price || 0);
+
+      if (brandFilter && !title.includes(brandFilter)) return false;
+      if (fuelFilter && String(car.fuel || "").toLowerCase() !== fuelFilter) return false;
+      if (gearboxFilter && String(car.gearbox || "").toLowerCase() !== gearboxFilter) return false;
+      if (yearFilter && String(car.year || "") !== yearFilter) return false;
+      if (govFilter && String(car.gov || "") !== govFilter) return false;
+      if (cityFilter && String(car.city || "") !== cityFilter) return false;
+      if (minPrice !== null && price < minPrice) return false;
+      if (maxPrice !== null && price > maxPrice) return false;
+      return true;
+    });
+  }, [filters, listings]);
 
   useEffect(() => {
     let mounted = true;
@@ -48,11 +74,11 @@ export default function CardListing() {
 
       {loading ? (
         <div className="text-gray-500">Chargement...</div>
-      ) : listings.length === 0 ? (
+      ) : filteredListings.length === 0 ? (
         <div className="text-gray-500">Aucune annonce disponible.</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {listings.map((car) => (
+          {filteredListings.map((car) => (
             <div
               key={car._id}
               onClick={() => navigate(`/annonce/${car._id}`)}
@@ -69,10 +95,6 @@ export default function CardListing() {
                   alt={car.title}
                   className="h-60 w-full object-cover"
                 />
-
-                <div className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white shadow flex items-center justify-center">
-                  <Heart className="h-5 w-5 text-gray-500" />
-                </div>
               </div>
 
               {/* Content */}

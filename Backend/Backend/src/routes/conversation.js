@@ -1,7 +1,7 @@
 import express from "express";
 // Utilise ../ pour remonter d'un dossier
-import Conversation from "../models/Conversation.js"; 
-import Message from "../models/Message.js";
+import Conversation from "../models/conversation.js"; 
+import Message from "../models/message.js";
 
 const router = express.Router();
 
@@ -43,7 +43,13 @@ router.delete("/full/:id/:userId", async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-
+// routes/conversation.js
+router.patch("/read/:id/:userId", async (req, res) => {
+  await Conversation.findByIdAndUpdate(req.params.id, {
+    $pull: { unreadBy: req.params.userId } // Retire l'utilisateur de la liste des non-lus
+  });
+  res.status(200).send();
+});
 
 
 
