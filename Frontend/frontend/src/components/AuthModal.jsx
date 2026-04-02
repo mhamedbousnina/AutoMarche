@@ -90,73 +90,94 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
     }
 
     async function handleSubmit() {
-        setError("");
-        setSuccess("");
-        setLoading(true);
+    setError("");
+    setSuccess("");
 
-        try {
-            if (isRegister) {
-                await callApi("/api/auth/register", {
-                    fullName,
-                    phone,
-                    email,
-                    password,
-                    confirmPassword,
-                });
+    // 1. Vérification des champs vides
+    const isFieldsEmpty =
+        (isRegister && (!fullName || !phone || !email || !password || !confirmPassword)) ||
+        (isLogin && (!email || !password)) ||
+        (isReset && !email);
 
-                // ✅ Message + animation
-                setSuccess("Compte créé ✅");
-                setShowSuccessAnim(true);
+    if (isFieldsEmpty) {
+        // ✅ On n'affiche l'erreur QUE si on n'est PAS en login
+        if (!isLogin) {
+            setError("Veuillez remplir tous les champs obligatoires (*).");
+        }
+        return; 
+    }
 
-                // ✅ après 1.2s, basculer vers login
-                setTimeout(() => {
-                    setShowSuccessAnim(false);
-                    setMode?.("login");
-                    setPassword("");
-                    setConfirmPassword("");
-                    setSuccess("");
-                }, 1200);
-                // ✅ laisser le message visible 3 secondes puis disparaître
-                setTimeout(() => {
-                    setShowSuccessAnim(false);
-                    setSuccess("");
-                }, 3000);
+    // 2. Validation stricte UNIQUEMENT pour l'inscription (Register)
+    if (isRegister) {
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]{8,12}$/;
+        
+        if (!passwordRegex.test(password)) {
+            setError("Le mot de passe doit contenir entre 8 et 12 caractères, une majuscule, un chiffre et un caractère spécial.");
+            return;
+        }
 
-
-           } else if (isLogin) {
-  const data = await callApi("/api/auth/login", { email, password });
-
-  // 1) save token
-  if (data?.token) localStorage.setItem("token", data.token);
-
-  // 2) récupérer user
-  const meRes = await getMe();
-
-  // ✅ FIX ICI
-  const meUser = meRes.user;
-
-  console.log("ME USER =", meUser); // 🔥 DEBUG
-
-  // 3) save user
-  localStorage.setItem("user", JSON.stringify(meUser));
-
-  // 🔥 important pour rafraîchir UI
-  window.dispatchEvent(new Event("userUpdated"));
-
-  // 4) callback
-  onAuthSuccess?.(meUser);
-
-  setTimeout(() => handleClose(), 300);
-} else if (isReset) {
-                const data = await callApi("/api/auth/forgot-password", { email });
-                setSuccess(data?.message || "Lien envoyé ✅");
-            }
-        } catch (e) {
-            setError(e.message);
-        } finally {
-            setLoading(false);
+        if (password !== confirmPassword) {
+            setError("Les mots de passe ne correspondent pas.");
+            return;
         }
     }
+
+    setLoading(true);
+    try {
+        if (isRegister) {
+            // Logique Register (Appel API classique)
+            await callApi("/api/auth/register", {
+                fullName,
+                phone,
+                email,
+                password,
+                confirmPassword,
+            });
+
+            setSuccess("Compte créé ✅");
+            setShowSuccessAnim(true);
+
+            setTimeout(() => {
+                setShowSuccessAnim(false);
+                setMode?.("login");
+                setPassword("");
+                setConfirmPassword("");
+                setSuccess("");
+            }, 1200);
+
+        } else if (isLogin) {
+            // Logique Login avec message d'erreur simplifié
+            try {
+                const data = await callApi("/api/auth/login", { email, password });
+
+                if (data?.token) localStorage.setItem("token", data.token);
+
+                const meRes = await getMe();
+                const meUser = meRes.user;
+
+                localStorage.setItem("user", JSON.stringify(meUser));
+                window.dispatchEvent(new Event("userUpdated"));
+                onAuthSuccess?.(meUser);
+
+                setTimeout(() => handleClose(), 300);
+
+            } catch (err) {
+                // ✅ On ignore le message serveur détaillé pour afficher un message simple
+                throw new Error("Email ou mot de passe incorrect.");
+            }
+
+        } else if (isReset) {
+            const data = await callApi("/api/auth/forgot-password", { email });
+            setSuccess(data?.message || "Lien envoyé ✅");
+        }
+    } catch (e) {
+        // Affiche soit l'erreur "Email ou mot de passe incorrect" (Login),
+        // soit les erreurs de l'API/Validation (Register)
+        setError(e.message);
+    } finally {
+        setLoading(false);
+    }
+}
 
     return (
         <div className="fixed inset-0 z-50">
@@ -224,12 +245,15 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
                             {/* REGISTER fields */}
                             {isRegister && (
                                 <>
+
+
                                     {/* Nom & Prenom */}
                                     <div className="relative">
                                         <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/35" />
+                                        <span className="absolute left-10 top-2 text-red-500 text-xs">*</span>
                                         <input
                                             type="text"
-                                            placeholder="Nom & prénom"
+                                            placeholder="Nom & prénom *"
                                             value={fullName}
                                             onChange={(e) => setFullName(e.target.value)}
                                             className="w-full h-12 rounded-xl bg-white/10 border border-white/10 pl-12 pr-4 outline-none focus:ring-2 focus:ring-yellow-400"
@@ -238,13 +262,23 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
 
                                     {/* Téléphone */}
                                     <div className="relative">
+                                        {/* Icône de téléphone */}
                                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/35" />
+
+                                        {/* Astérisque rouge obligatoire */}
+                                        <span className="absolute left-10 top-2 text-red-500 text-xs">*</span>
+
                                         <input
-                                            type="tel"
-                                            placeholder="Téléphone"
+                                            type="text"
+                                            inputMode="numeric" // Force le clavier numérique sur mobile
+                                            placeholder="Téléphone *"
                                             value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            className="w-full h-12 rounded-xl bg-white/10 border border-white/10 pl-12 pr-4 outline-none focus:ring-2 focus:ring-yellow-400"
+                                            onChange={(e) => {
+                                                // ✅ CORRECTION : Supprime tout ce qui n'est PAS un chiffre (0-9)
+                                                const value = e.target.value.replace(/\D/g, "").slice(0, 8);
+                                                setPhone(value);
+                                            }}
+                                            className="w-full h-12 rounded-xl bg-white/10 border border-white/10 pl-12 pr-4 outline-none focus:ring-2 focus:ring-yellow-400 transition-all"
                                         />
                                     </div>
                                 </>
@@ -253,9 +287,11 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
                             {/* Email */}
                             <div className="relative">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/35" />
+                                {/* Affiche l'étoile seulement en mode inscription */}
+                                {isRegister && <span className="absolute left-10 top-2 text-red-500 text-xs">*</span>}
                                 <input
                                     type="email"
-                                    placeholder="votre@email.com"
+                                    placeholder={isRegister ? "votre@email.com *" : "votre@email.com"}
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full h-12 rounded-xl bg-white/10 border border-white/10 pl-12 pr-4 outline-none focus:ring-2 focus:ring-yellow-400"
@@ -266,14 +302,15 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
                             {!isReset && (
                                 <div className="relative">
                                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/35" />
+                                    {isRegister && <span className="absolute left-10 top-2 text-red-500 text-xs">*</span>}
                                     <input
                                         type={showPwd ? "text" : "password"}
-                                        placeholder="Mot de passe"
+                                        placeholder={isRegister ? "Mot de passe *" : "Mot de passe"}
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         className="w-full h-12 rounded-xl bg-white/10 border border-white/10 pl-12 pr-12 outline-none focus:ring-2 focus:ring-yellow-400"
                                     />
-                                    <button
+                                     <button
                                         type="button"
                                         onClick={() => setShowPwd((s) => !s)}
                                         className="absolute right-4 top-1/2 -translate-y-1/2 text-white/55 hover:text-white"
@@ -291,9 +328,10 @@ export default function AuthModal({ open, onClose, mode, setMode, onAuthSuccess 
                             {isRegister && (
                                 <div className="relative">
                                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/35" />
+                                    <span className="absolute left-10 top-2 text-red-500 text-xs">*</span>
                                     <input
                                         type={showPwd ? "text" : "password"}
-                                        placeholder="Confirmer le mot de passe"
+                                        placeholder="Confirmer le mot de passe *"
                                         value={confirmPassword}
                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                         className="w-full h-12 rounded-xl bg-white/10 border border-white/10 pl-12 pr-4 outline-none focus:ring-2 focus:ring-yellow-400"

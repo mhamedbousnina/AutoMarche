@@ -13,6 +13,7 @@ import AnnonceDetail from "./pages/AnnonceDetail";
 import EditListingPage from "./pages/EditListingPage";
 import MyMessagesContent from "./components/MyMessagesContent";
 
+
 const EMPTY_FILTERS = {
   brand: "",
   minPrice: "",

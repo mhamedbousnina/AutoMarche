@@ -22,10 +22,10 @@ export function forgotPassword(email) {
   });
 }
 
-export function resetPassword(token, newPassword) {
+export function resetPassword(data) { // Accept the whole object
   return apiRequest("/api/auth/reset-password", {
     method: "POST",
-    body: JSON.stringify({ token, newPassword }),
+    body: JSON.stringify(data), 
   });
 }
 
